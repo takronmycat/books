@@ -35,6 +35,17 @@
       }
     }
   </script>
+  <style>
+    /* iPad Safari でカメラ映像が枠いっぱいに鮮明表示されるよう調整 */
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+    }
+    #reader__scan_region {
+      min-height: 100% !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-24">
 
@@ -167,7 +178,12 @@
               </svg>
             </div>
             <p class="text-sm font-semibold mb-1">カメラは停止中です</p>
-            <p class="text-xs text-slate-400 max-w-xs">「カメラを起動」を押すと、本の裏表紙のISBNバーコードを連続で読み取れます。</p>
+            <p class="text-xs text-slate-400 max-w-sm">iPadでは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。読み取りにくい場合は「写真から読み取る」も使えます。</p>
+          </div>
+
+          <!-- リアルタイム読取ガイド（下段192バーコード検知時など） -->
+          <div id="scan-live-hint" class="hidden absolute bottom-3 left-3 right-3 bg-amber-500/95 text-slate-950 px-3 py-1.5 rounded-xl shadow-md text-center text-xs font-bold backdrop-blur-xs">
+            下の段（価格コード）を検出中 → 少し上の段（978...）を枠に入れてください
           </div>
 
           <!-- スキャン通信中オーバーレイ -->
@@ -180,21 +196,37 @@
           </div>
         </div>
 
-        <!-- カメラ操作ボタン -->
-        <div class="mt-3 grid grid-cols-2 gap-2.5">
-          <button id="btn-start-camera" onclick="startScanner()" class="col-span-2 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+        <!-- iPad/スマホ用ズーム調整スライダー（カメラ対応時のみ自動表示） -->
+        <div id="zoom-control-bar" class="hidden mt-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 flex items-center gap-3">
+          <span class="text-xs font-bold text-slate-600 whitespace-nowrap">🔍 ズーム: <span id="zoom-value-label">1.5</span>x</span>
+          <input type="range" id="camera-zoom-slider" min="1" max="3" step="0.1" value="1.5" oninput="handleZoomChange(this.value)"
+            class="flex-1 accent-brand-600 cursor-pointer">
+        </div>
+
+        <!-- カメラ操作ボタン ＆ 写真スキャン保険ボタン -->
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <button id="btn-start-camera" onclick="startScanner()" class="sm:col-span-2 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
             </svg>
             <span>カメラを起動して連続スキャン</span>
           </button>
-          <button id="btn-stop-camera" onclick="stopScanner()" class="hidden col-span-2 py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+          <button id="btn-stop-camera" onclick="stopScanner()" class="hidden sm:col-span-2 py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
             </svg>
             <span>カメラを停止する</span>
           </button>
+
+          <!-- iPad標準カメラで撮影して読む保険ボタン -->
+          <label class="py-3.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-800 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition border border-slate-200">
+            <svg class="w-4 h-4 text-brand-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>写真から読取</span>
+            <input type="file" id="barcode-image-file" accept="image/*" capture="environment" class="hidden" onchange="handleImageFileScan(event)">
+          </label>
         </div>
 
         <!-- 手動ISBN入力＆テスト用アコーディオン -->
@@ -696,141 +728,206 @@
 
     /**
      * =====================================================================
-     * 部屋・本棚の2階層選択と新規追加ロジック
+     * バーコードスキャナー制御（iPadOS 高解像度・ズーム・2段バーコード対応）
      * =====================================================================
      */
-    function renderRoomAndShelfSelectors() {
-      const uniqueRooms = [...new Set(locationMaster.map(item => item.room))];
-      if (!uniqueRooms.includes(currentRoom) && uniqueRooms.length > 0) {
-        currentRoom = uniqueRooms[0];
+    let activeVideoTrack = null;
+    let liveHintTimeout = null;
+
+    async function startScanner() {
+      if (isScannerRunning) return;
+
+      const placeholder = document.getElementById('camera-placeholder');
+      const btnStart = document.getElementById('btn-start-camera');
+      const btnStop = document.getElementById('btn-stop-camera');
+
+      try {
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader", {
+            formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true
+            },
+            verbose: false
+          });
+        }
+
+        const config = {
+          fps: 15,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            // iPadの広い画面に合わせて横長スキャン枠を大きく確保
+            const width = Math.min(Math.floor(viewfinderWidth * 0.88), 520);
+            const height = Math.min(Math.floor(viewfinderHeight * 0.45), 180);
+            return { width: Math.max(width, 220), height: Math.max(height, 100) };
+          },
+          videoConstraints: {
+            facingMode: "environment",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        };
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          onBarcodeDetected,
+          () => {}
+        );
+
+        isScannerRunning = true;
+        placeholder.classList.add('hidden');
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+
+        // カメラトラックのオートフォーカス＆ズーム機能セットアップ
+        setupCameraTrackEnhancements();
+
+        showToast('カメラを起動しました。本から15〜20cm離して上の段（978...）を映してください', 'info');
+      } catch (err) {
+        console.error('Camera start error:', err);
+        showToast('カメラを起動できませんでした。権限設定または「写真から読取」をお試しください', 'error');
       }
-
-      // 部屋チップ描画
-      const roomContainer = document.getElementById('room-presets');
-      roomContainer.innerHTML = uniqueRooms.map(room => {
-        const isSelected = room === currentRoom;
-        const style = isSelected
-          ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
-          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
-        return `
-          <button onclick="selectRoom('${escapeHtml(room)}')"
-            class="px-3 py-2 rounded-xl border text-xs font-bold transition active:scale-95 ${style}">
-            🚪 ${escapeHtml(room)}
-          </button>
-        `;
-      }).join('');
-
-      // 選択中の部屋に属する本棚リストを取得
-      const shelvesInRoom = locationMaster
-        .filter(item => item.room === currentRoom)
-        .map(item => item.shelf);
-
-      if (!shelvesInRoom.includes(currentShelf) && shelvesInRoom.length > 0) {
-        currentShelf = shelvesInRoom[0];
-      }
-
-      document.getElementById('current-room-label').textContent = currentRoom;
-
-      // 本棚チップ描画
-      const shelfContainer = document.getElementById('shelf-presets');
-      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
-        const isSelected = shelf === currentShelf;
-        const style = isSelected
-          ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-          : 'bg-teal-50/50 text-teal-900 border-teal-200/80 hover:bg-teal-100/70';
-        return `
-          <button onclick="selectShelf('${escapeHtml(shelf)}')"
-            class="px-3 py-2 rounded-xl border text-xs font-bold transition active:scale-95 ${style}">
-            🗄️ ${escapeHtml(shelf)}
-          </button>
-        `;
-      }).join('');
-
-      document.getElementById('selected-location-badge').textContent = `${currentRoom} ＞ ${currentShelf}`;
-    }
-
-    function selectRoom(room) {
-      currentRoom = room;
-      const firstShelf = locationMaster.find(item => item.room === room);
-      if (firstShelf) currentShelf = firstShelf.shelf;
-      renderRoomAndShelfSelectors();
-    }
-
-    function selectShelf(shelf) {
-      currentShelf = shelf;
-      renderRoomAndShelfSelectors();
-    }
-
-    function toggleNewRoomForm() {
-      document.getElementById('new-room-form').classList.toggle('hidden');
-    }
-
-    function toggleNewShelfForm() {
-      document.getElementById('new-shelf-form').classList.toggle('hidden');
-    }
-
-    async function addNewRoomAndShelf() {
-      const roomInput = document.getElementById('input-new-room');
-      const shelfInput = document.getElementById('input-new-room-shelf');
-      const room = roomInput.value.trim();
-      const shelf = shelfInput.value.trim();
-
-      if (!room || !shelf) {
-        showToast('部屋名と最初の本棚名の両方を入力してください', 'warning');
-        return;
-      }
-
-      await persistNewLocation(room, shelf);
-      roomInput.value = '';
-      shelfInput.value = '';
-      toggleNewRoomForm();
-    }
-
-    async function addNewShelfToCurrentRoom() {
-      const shelfInput = document.getElementById('input-new-shelf');
-      const shelf = shelfInput.value.trim();
-      if (!shelf) {
-        showToast('追加する本棚名を入力してください', 'warning');
-        return;
-      }
-
-      await persistNewLocation(currentRoom, shelf);
-      shelfInput.value = '';
-      toggleNewShelfForm();
     }
 
     /**
-     * 新しい「部屋＋本棚」をローカル＆登録用GASのLocationsシートへ保存
+     * iPad/スマホカメラの連続オートフォーカスとハードウェアズームを有効化
      */
-    async function persistNewLocation(room, shelf) {
-      const exists = locationMaster.some(item => item.room === room && item.shelf === shelf);
-      if (!exists) {
-        locationMaster.push({ room, shelf });
-      }
-      currentRoom = room;
-      currentShelf = shelf;
-      renderRoomAndShelfSelectors();
-      showToast(`「${room} ＞ ${shelf}」を追加・選択しました`, 'success');
+    async function setupCameraTrackEnhancements() {
+      try {
+        const videoElem = document.querySelector('#reader video');
+        if (!videoElem || !videoElem.srcObject) return;
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (!tracks || tracks.length === 0) return;
 
-      if (registerGasUrl && registerGasUrl.startsWith('http')) {
-        try {
-          const res = await fetch(registerGasUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-              action: 'addLocation',
-              room: room,
-              shelf: shelf
-            })
+        activeVideoTrack = tracks[0];
+        const capabilities = activeVideoTrack.getCapabilities ? activeVideoTrack.getCapabilities() : {};
+
+        // 連続オートフォーカスが使える端末なら有効化
+        if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+          await activeVideoTrack.applyConstraints({
+            advanced: [{ focusMode: 'continuous' }]
           });
-          const data = await res.json();
-          if (data.status === 'success' && Array.isArray(data.locations)) {
-            locationMaster = data.locations;
-            renderRoomAndShelfSelectors();
-          }
-        } catch (err) {
-          console.error('Failed to sync location to GAS:', err);
         }
+
+        // ズーム対応端末ならスライダーを表示し、ピントが合いやすい1.5倍を初期値に設定
+        if (capabilities.zoom) {
+          const slider = document.getElementById('camera-zoom-slider');
+          const zoomBar = document.getElementById('zoom-control-bar');
+          const minZ = capabilities.zoom.min || 1;
+          const maxZ = Math.min(capabilities.zoom.max || 3, 4);
+          const initialZ = Math.min(Math.max(1.5, minZ), maxZ);
+
+          slider.min = minZ;
+          slider.max = maxZ;
+          slider.step = capabilities.zoom.step || 0.1;
+          slider.value = initialZ;
+          zoomBar.classList.remove('hidden');
+          await handleZoomChange(initialZ);
+        }
+      } catch (e) {
+        console.log('Camera enhancement skipped:', e);
+      }
+    }
+
+    async function handleZoomChange(zoomVal) {
+      const numVal = Number(zoomVal);
+      document.getElementById('zoom-value-label').textContent = numVal.toFixed(1);
+      if (!activeVideoTrack) return;
+      try {
+        await activeVideoTrack.applyConstraints({
+          advanced: [{ zoom: numVal }]
+        });
+      } catch (e) {}
+    }
+
+    async function stopScanner() {
+      if (!html5QrCode || !isScannerRunning) return;
+      try {
+        await html5QrCode.stop();
+        isScannerRunning = false;
+        activeVideoTrack = null;
+        document.getElementById('camera-placeholder').classList.remove('hidden');
+        document.getElementById('btn-start-camera').classList.remove('hidden');
+        document.getElementById('btn-stop-camera').classList.add('hidden');
+        document.getElementById('zoom-control-bar').classList.add('hidden');
+        document.getElementById('scan-live-hint').classList.add('hidden');
+      } catch (err) {
+        console.error('Camera stop error:', err);
+      }
+    }
+
+    function onBarcodeDetected(decodedText) {
+      const cleaned = decodedText.replace(/[^0-9]/g, '');
+
+      // 2段バーコードの下段(192...)を拾っている場合、無反応に見えないよう画面に誘導ヒントを出す
+      if (/^192\d{10}$/.test(cleaned)) {
+        const hint = document.getElementById('scan-live-hint');
+        hint.classList.remove('hidden');
+        clearTimeout(liveHintTimeout);
+        liveHintTimeout = setTimeout(() => hint.classList.add('hidden'), 2000);
+        return;
+      }
+
+      // 978/979始まりの13桁ISBNのみ通す
+      if (!/^(978|979)\d{10}$/.test(cleaned)) {
+        return;
+      }
+
+      document.getElementById('scan-live-hint').classList.add('hidden');
+
+      const now = Date.now();
+      if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+        return;
+      }
+      if (isProcessingScan || pendingDuplicateData !== null) {
+        return;
+      }
+
+      lastScannedIsbn = cleaned;
+      lastScannedTime = now;
+      registerBookByIsbn(cleaned, false);
+    }
+
+    /**
+     * iPad標準カメラで撮影した静止画からバーコードを読み取る（ピントが合いにくい本用の保険）
+     */
+    async function handleImageFileScan(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (isScannerRunning) {
+        await stopScanner();
+      }
+
+      const badge = document.getElementById('scan-processing-badge');
+      const badgeText = document.getElementById('scan-processing-text');
+      badgeText.textContent = '撮影した写真からバーコードを解析中...';
+      badge.classList.remove('hidden');
+
+      try {
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader", {
+            formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+            verbose: false
+          });
+        }
+        const decodedText = await html5QrCode.scanFile(file, false);
+        const cleaned = decodedText.replace(/[^0-9]/g, '');
+
+        if (/^(978|979)\d{10}$/.test(cleaned)) {
+          badge.classList.add('hidden');
+          await registerBookByIsbn(cleaned, false);
+        } else if (/^192\d{10}$/.test(cleaned)) {
+          badge.classList.add('hidden');
+          showToast(`下の段の価格コード（${cleaned}）が写りました。上の段（978...）を中心に撮り直してください`, 'warning');
+        } else {
+          badge.classList.add('hidden');
+          showToast(`ISBN以外のコード（${cleaned}）が検出されました`, 'warning');
+        }
+      } catch (err) {
+        badge.classList.add('hidden');
+        showToast('写真からバーコードを読み取れませんでした。明るくピントが合った状態で再撮影してください', 'error');
       }
     }
 
