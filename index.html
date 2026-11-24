@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hondana Scan - 教員用 蔵書スキャナー＆本棚検索</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- html5-qrcode: スマホカメラでのバーコード（EAN-13 / ISBN）読み取り -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Tone.js: 電子ビープ音・重複警告音生成 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-24">
+
+  <!-- =====================================================================
+       ヘッダー：タイトル・接続モード表示・GAS連携設定ボタン
+  ====================================================================== -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3">
+    <div class="max-w-3xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900">Hondana Scan</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">教員蔵書</span>
+          </div>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span id="connection-label" class="text-[11px] font-medium text-slate-500">デモモード（GAS未接続）</span>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="openSettingsModal()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 flex items-center gap-1.5 text-xs font-semibold">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span>API設定</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- トースト通知エリア -->
+  <div id="toast-container" class="fixed top-16 left-0 right-0 z-50 pointer-events-none flex flex-col items-center gap-2 px-4"></div>
+
+  <!-- =====================================================================
+       メインコンテンツ
+  ====================================================================== -->
+  <main class="max-w-3xl mx-auto px-4 pt-5">
+
+    <!-- ===================================================================
+         ビュー1：バーコード連続スキャン＆登録画面
+    ==================================================================== -->
+    <section id="view-scan" class="space-y-5">
+
+      <!-- ステップ1：「部屋」と「本棚」の2階層選択＆新規追加 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-brand-600 flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-brand-100 text-brand-700 inline-flex items-center justify-center text-xs">1</span>
+            登録先の「部屋」と「本棚」を選択
+          </span>
+          <span id="selected-location-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
+            職員室 ＞ 共通・教務キャビネット
+          </span>
+        </div>
+
+        <!-- 1-A. 部屋の選択＆追加 -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-600">① 部屋を選ぶ</label>
+            <button onclick="toggleNewRoomForm()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700 flex items-center gap-1">
+              <span>＋ 新しい部屋を追加</span>
+            </button>
+          </div>
+          <div id="room-presets" class="flex flex-wrap gap-2"></div>
+
+          <!-- 新しい部屋追加フォーム（折りたたみ） -->
+          <div id="new-room-form" class="hidden bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+            <p class="text-[11px] font-bold text-slate-600">新しい部屋と、最初の本棚名を入力して追加</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input type="text" id="input-new-room" placeholder="部屋名（例：第2職員室）"
+                class="text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <input type="text" id="input-new-room-shelf" placeholder="最初の本棚名（例：英語科棚A）"
+                class="text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div class="flex justify-end gap-2">
+              <button onclick="toggleNewRoomForm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">閉じる</button>
+              <button onclick="addNewRoomAndShelf()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-bold">部屋と本棚を追加</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1-B. 選択中の部屋にある本棚の選択＆追加 -->
+        <div class="pt-3 border-t border-slate-100 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-600">
+              ② 「<span id="current-room-label" class="text-brand-700">職員室</span>」の中の本棚を選ぶ
+            </label>
+            <button onclick="toggleNewShelfForm()" class="text-[11px] font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1">
+              <span>＋ この部屋に本棚を追加</span>
+            </button>
+          </div>
+          <div id="shelf-presets" class="flex flex-wrap gap-2"></div>
+
+          <!-- 現在の部屋に新しい本棚を追加するフォーム（折りたたみ） -->
+          <div id="new-shelf-form" class="hidden bg-teal-50/70 p-3 rounded-xl border border-teal-200 flex gap-2">
+            <input type="text" id="input-new-shelf" placeholder="新しい本棚名（例：窓際スチール棚B）"
+              class="flex-1 text-xs rounded-xl border border-teal-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+            <button onclick="addNewShelfToCurrentRoom()" class="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold whitespace-nowrap">
+              追加
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ステップ2：カメラバーコードリーダー -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-brand-600 flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-brand-100 text-brand-700 inline-flex items-center justify-center text-xs">2</span>
+            裏表紙のバーコード（978...）をスキャン
+          </span>
+          <span class="text-[11px] text-slate-400">重複・2冊目自動検知</span>
+        </div>
+
+        <!-- カメラプレビューコンテナ -->
+        <div class="relative w-full overflow-hidden rounded-2xl bg-slate-900 aspect-[4/3] sm:aspect-video flex items-center justify-center border border-slate-800">
+          <div id="reader" class="w-full h-full"></div>
+
+          <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-slate-900/95 text-white">
+            <div class="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
+              <svg class="w-7 h-7 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </div>
+            <p class="text-sm font-semibold mb-1">カメラは停止中です</p>
+            <p class="text-xs text-slate-400 max-w-xs">「カメラを起動」を押すと、本の裏表紙のISBNバーコードを連続で読み取れます。</p>
+          </div>
+
+          <!-- スキャン通信中オーバーレイ -->
+          <div id="scan-processing-badge" class="hidden absolute top-3 left-3 right-3 bg-brand-600/95 text-white px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 text-xs font-semibold backdrop-blur-sm">
+            <svg class="animate-spin h-4 w-4 text-white shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="scan-processing-text">重複確認と書誌情報を取得中...</span>
+          </div>
+        </div>
+
+        <!-- カメラ操作ボタン -->
+        <div class="mt-3 grid grid-cols-2 gap-2.5">
+          <button id="btn-start-camera" onclick="startScanner()" class="col-span-2 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+            <span>カメラを起動して連続スキャン</span>
+          </button>
+          <button id="btn-stop-camera" onclick="stopScanner()" class="hidden col-span-2 py-3.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+            </svg>
+            <span>カメラを停止する</span>
+          </button>
+        </div>
+
+        <!-- 手動ISBN入力＆テスト用アコーディオン -->
+        <details class="mt-3 pt-3 border-t border-slate-100 group">
+          <summary class="text-xs font-semibold text-slate-500 cursor-pointer hover:text-slate-700 list-none flex items-center justify-between">
+            <span>バーコードが読めない場合（ISBN手入力 / 重複テスト）</span>
+            <span class="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+          </summary>
+          <div class="mt-2.5 space-y-2">
+            <div class="flex gap-2">
+              <input type="text" id="manual-isbn-input" inputmode="numeric" placeholder="9784XXXXXXXXX（13桁）"
+                class="flex-1 text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-slate-50">
+              <button onclick="handleManualIsbnSubmit()" class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold whitespace-nowrap">
+                登録
+              </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button onclick="simulateSampleScan(false)" class="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition">
+                新規ISBNで登録テスト
+              </button>
+              <button onclick="simulateSampleScan(true)" class="py-2 px-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition">
+                登録済みISBNで「2冊目アラート」テスト
+              </button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- ステップ3：今回のセッションでスキャンした履歴 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+            今回スキャンした本（<span id="session-count">0</span>冊）
+          </h2>
+          <button onclick="switchTab('search')" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+            すべての蔵書を探す →
+          </button>
+        </div>
+
+        <div id="session-history-list" class="space-y-2.5">
+          <p class="text-xs text-slate-400 text-center py-6">
+            まだスキャン履歴はありません。上のカメラから本を読み取ってください。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         ビュー2：蔵書探索・本棚ファインダー画面
+    ==================================================================== -->
+    <section id="view-search" class="hidden space-y-4">
+
+      <!-- 検索＆2段階場所フィルタコントロール -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input type="text" id="search-query-input" oninput="renderBooksGrid()" placeholder="タイトル・著者・ISBN・メモで検索..."
+              class="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <button onclick="fetchAllBooks(true)" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition" title="最新情報を再読み込み">
+            <svg id="refresh-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- フィルタ1段目：部屋チップ -->
+        <div class="space-y-1">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">部屋で絞り込み</span>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-room-chips"></div>
+        </div>
+
+        <!-- フィルタ2段目：本棚チップ（部屋が選択されたとき、または全本棚から絞り込み） -->
+        <div id="filter-shelf-wrapper" class="space-y-1 pt-1 border-t border-slate-100">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">本棚で絞り込み</span>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-shelf-chips"></div>
+        </div>
+
+        <!-- 件数表示と並び替え -->
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+          <span class="font-semibold text-slate-600">
+            該当: <span id="filtered-books-count" class="text-brand-600 font-bold text-sm">0</span> 冊
+          </span>
+          <div class="flex items-center gap-2">
+            <select id="sort-select" onchange="renderBooksGrid()" class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none">
+              <option value="newest">登録が新しい順</option>
+              <option value="oldest">登録が古い順</option>
+              <option value="title">タイトル順</option>
+              <option value="location">部屋・本棚順</option>
+            </select>
+            <button onclick="toggleViewMode()" class="p-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700" title="表示切替">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 蔵書一覧コンテナ -->
+      <div id="books-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+    </section>
+
+  </main>
+
+  <!-- =====================================================================
+       下部固定ナビゲーションバー
+  ====================================================================== -->
+  <nav class="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2">
+    <div class="max-w-md mx-auto grid grid-cols-2 gap-2">
+      <button id="nav-scan" onclick="switchTab('scan')" class="py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+        </svg>
+        <span>スキャン登録</span>
+      </button>
+      <button id="nav-search" onclick="switchTab('search')" class="py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span>本棚を探す</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- =====================================================================
+       モーダル1：同一ISBN 重複検知＆2冊目登録アラートモーダル
+  ====================================================================== -->
+  <div id="duplicate-alert-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 border-t-4 border-amber-500">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div>
+          <span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-bold mb-1">
+            重複スキャン検知（すでに <span id="dup-existing-count">1</span> 冊登録済み）
+          </span>
+          <h3 id="dup-book-title" class="font-bold text-base text-slate-900 leading-snug">書籍タイトル</h3>
+          <p id="dup-book-isbn" class="text-xs font-mono text-slate-500 mt-0.5">ISBN: 978...</p>
+        </div>
+      </div>
+
+      <!-- すでに登録されている本の場所一覧 -->
+      <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-2">
+        <p class="text-xs font-bold text-amber-900">現在登録されている保管場所：</p>
+        <div id="dup-existing-list" class="space-y-2"></div>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        同じ本を複数冊持っている場合（複本）は<strong>「<span id="dup-next-copy-num">2</span>冊目として追加登録」</strong>を押してください。二重スキャンしてしまった場合はキャンセルできます。
+      </p>
+
+      <!-- 3つのアクションボタン -->
+      <div class="space-y-2 pt-1">
+        <button onclick="confirmRegisterDuplicate()" class="w-full py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs sm:text-sm shadow-sm transition">
+          📚 <span id="dup-btn-copy-label">2冊目（複本）</span>として「<span id="dup-target-loc"></span>」に追加登録する
+        </button>
+
+        <button id="btn-move-existing-instead" onclick="moveFirstExistingToCurrentLocation()" class="w-full py-3 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 font-bold text-xs transition">
+          📦 登録済みの1冊目を「<span id="dup-move-target-loc"></span>」へ場所移動する
+        </button>
+
+        <button onclick="closeDuplicateModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+          登録せずキャンセル（二重読み取り）
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       モーダル2：書籍詳細＆場所移動・メモ編集・削除モーダル
+  ====================================================================== -->
+  <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+      <div class="flex justify-between items-start gap-4">
+        <div class="flex gap-4">
+          <img id="modal-book-cover" src="" alt="表紙" class="w-24 h-34 object-cover rounded-xl bg-slate-100 border border-slate-200 shrink-0 shadow-xs">
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span id="modal-book-location" class="inline-block px-2.5 py-1 rounded-lg bg-brand-100 text-brand-800 text-xs font-bold">
+                部屋 ＞ 本棚
+              </span>
+              <span id="modal-book-copy-badge" class="hidden inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[11px] font-bold">
+                2冊目
+              </span>
+            </div>
+            <h3 id="modal-book-title" class="font-bold text-base text-slate-900 leading-snug">タイトル</h3>
+            <p id="modal-book-author" class="text-xs text-slate-600">著者名</p>
+            <p id="modal-book-publisher" class="text-[11px] text-slate-400">出版社</p>
+          </div>
+        </div>
+        <button onclick="closeBookDetailModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1 border border-slate-200/70">
+        <div class="flex justify-between"><span class="text-slate-400">ISBN:</span><span id="modal-book-isbn" class="font-mono font-medium"></span></div>
+        <div class="flex justify-between"><span class="text-slate-400">登録日時:</span><span id="modal-book-timestamp"></span></div>
+      </div>
+
+      <!-- 保管場所（部屋・本棚）の移動＆備考メモフォーム -->
+      <div class="pt-2 border-t border-slate-100 space-y-3">
+        <label class="block text-xs font-bold text-slate-700">別の部屋・本棚へ移動 / 備考メモを更新</label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold">部屋名</span>
+            <input type="text" id="modal-new-room" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold">本棚名</span>
+            <input type="text" id="modal-new-shelf" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">備考メモ（担当者名・教科・貸出メモなど）</span>
+          <input type="text" id="modal-new-note" placeholder="例：〇〇先生私物、赤本2026年度版など"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button onclick="updateBookDetails()" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
+          変更を保存する
+        </button>
+      </div>
+
+      <!-- 削除確認エリア -->
+      <div class="pt-2 flex justify-between items-center border-t border-slate-100">
+        <button id="btn-delete-step1" onclick="showDeleteConfirm()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 py-2 px-3 rounded-lg hover:bg-rose-50">
+          この本をリストから削除
+        </button>
+        <div id="delete-confirm-box" class="hidden flex items-center gap-2">
+          <span class="text-xs text-rose-600 font-bold">本当に削除しますか？</span>
+          <button onclick="executeDeleteBook()" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold">削除実行</button>
+          <button onclick="hideDeleteConfirm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       モーダル3：単独GAS 2本（登録用・検索用）連携設定モーダル
+  ====================================================================== -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-slate-900">単独GAS API 連携設定</h3>
+        <button onclick="closeSettingsModal()" class="p-2 rounded-full bg-slate-100 text-slate-500">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        スプレッドシート（ID: <code class="bg-slate-100 px-1 rounded">1zkQs9...</code>）に接続する2つの単独GASのウェブアプリURLを設定します。
+      </p>
+
+      <div class="space-y-3">
+        <div class="space-y-1">
+          <label class="block text-xs font-bold text-slate-700">① 登録・更新用 GAS URL（RegisterApi.gs）</label>
+          <input type="url" id="register-gas-url-input" placeholder="https://script.google.com/macros/s/XXXX/exec"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+          <p class="text-[11px] text-slate-400">バーコード登録・場所移動・棚追加に使用します。</p>
+        </div>
+
+        <div class="space-y-1">
+          <label class="block text-xs font-bold text-slate-700">② 検索・閲覧用 GAS URL（SearchApi.gs）</label>
+          <input type="url" id="search-gas-url-input" placeholder="https://script.google.com/macros/s/YYYY/exec"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+          <p class="text-[11px] text-slate-400">蔵書の一覧表示・検索に使用します（未入力時は登録用URLで代用）。</p>
+        </div>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-800 leading-relaxed">
+        <strong>💡 GitHub Pages 公開時の設定：</strong><br>
+        <code>index.html</code> 内の定数 <code>DEFAULT_REGISTER_GAS_URL</code> と <code>DEFAULT_SEARCH_GAS_URL</code> にそれぞれのURLを貼り付けておくと、先生方のスマホで開いた瞬間に自動接続されます。
+      </div>
+
+      <div class="flex gap-2 pt-1">
+        <button onclick="saveGasUrlSettings()" class="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
+          保存してデータ再読み込み
+        </button>
+        <button onclick="closeSettingsModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       アプリケーション制御スクリプト
+  ====================================================================== -->
+  <script>
+    /**
+     * 【重要】単独GAS 2本のウェブアプリURLをここに貼り付けてGitHubにPushすると、
+     * どの端末から開いても最初からスプレッドシートと自動連携します。
+     */
+    const DEFAULT_REGISTER_GAS_URL = ""; // RegisterApi.gs のデプロイURL
+    const DEFAULT_SEARCH_GAS_URL   = ""; // SearchApi.gs のデプロイURL
+
+    // URLパラメータ (?reg=...&search=...) からの上書きにも対応
+    const urlParams = new URLSearchParams(window.location.search);
+    let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
+    let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
+
+    // 部屋・本棚マスタ（初期プリセット、GAS連携後はLocationsシートと同期）
+    let locationMaster = [
+      { room: "職員室", shelf: "共通・教務キャビネット" },
+      { room: "職員室", shelf: "窓際スチール棚A" },
+      { room: "理科準備室", shelf: "指導書・資料棚" },
+      { room: "社会科準備室", shelf: "地図・資料集ラック" },
+      { room: "進路指導室", shelf: "赤本・大学案内棚" }
+    ];
+
+    let currentRoom = "職員室";
+    let currentShelf = "共通・教務キャビネット";
+
+    // スキャナー状態管理
+    let html5QrCode = null;
+    let isScannerRunning = false;
+    let isProcessingScan = false;
+    let lastScannedIsbn = "";
+    let lastScannedTime = 0;
+    const SCAN_COOLDOWN_MS = 3500;
+
+    // 重複スキャン確認モーダル用の一時保持データ
+    let pendingDuplicateData = null;
+
+    // 蔵書データ状態
+    let sessionScannedBooks = [];
+    let allBooks = [];
+    let activeRoomFilter = "ALL";
+    let activeShelfFilter = "ALL";
+    let isGridView = true;
+    let selectedBookForModal = null;
+
+    // デモモード用サンプル蔵書（教員向け）
+    const DEMO_INITIAL_BOOKS = [
+      {
+        id: "demo-1",
+        timestamp: "2026/11/20 14:30:00",
+        isbn: "9784873119038",
+        room: "職員室",
+        shelf: "共通・教務キャビネット",
+        copyNumber: 1,
+        title: "リーダブルコード ―より良いコードを書くためのシンプルで実践的なテクニック",
+        author: "Dustin Boswell / Trevor Foucher",
+        publisher: "オライリー・ジャパン",
+        coverUrl: "https://cover.openbd.jp/9784873119038.jpg",
+        note: "情報科・共通指導用"
+      },
+      {
+        id: "demo-2",
+        timestamp: "2026/11/21 16:10:00",
+        isbn: "9784297127473",
+        room: "進路指導室",
+        shelf: "赤本・大学案内棚",
+        copyNumber: 1,
+        title: "Webを支える技術 - HTTP、URI、HTML、そしてREST",
+        author: "山本 陽平",
+        publisher: "技術評論社",
+        coverUrl: "https://cover.openbd.jp/9784297127473.jpg",
+        note: ""
+      },
+      {
+        id: "demo-3",
+        timestamp: "2026/11/24 09:15:00",
+        isbn: "9784101010014",
+        room: "職員室",
+        shelf: "窓際スチール棚A",
+        copyNumber: 1,
+        title: "人間失格",
+        author: "太宰 治",
+        publisher: "新潮社",
+        coverUrl: "https://cover.openbd.jp/9784101010014.jpg",
+        note: "国語科資料"
+      }
+    ];
+
+    /**
+     * 初期化処理
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      renderRoomAndShelfSelectors();
+      updateConnectionBadge();
+      fetchAllBooks(false);
+    });
+
+    /**
+     * 接続ステータス表示の更新
+     */
+    function updateConnectionBadge() {
+      const dot = document.getElementById('connection-dot');
+      const label = document.getElementById('connection-label');
+      const hasReg = registerGasUrl && registerGasUrl.startsWith('http');
+      const hasSearch = searchGasUrl && searchGasUrl.startsWith('http');
+
+      if (hasReg && hasSearch) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        label.textContent = '登録GAS・検索GAS 両方連携中';
+        label.className = 'text-[11px] font-semibold text-emerald-700';
+      } else if (hasReg) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        label.textContent = '登録GAS 連携中';
+        label.className = 'text-[11px] font-semibold text-emerald-700';
+      } else if (hasSearch) {
+        dot.className = 'w-2 h-2 rounded-full bg-sky-500';
+        label.textContent = '検索専用GAS 連携中（閲覧モード）';
+        label.className = 'text-[11px] font-semibold text-sky-700';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+        label.textContent = 'デモモード（GAS未接続）';
+        label.className = 'text-[11px] font-medium text-slate-500';
+      }
+    }
+
+    /**
+     * トースト通知（alert代替）
+     */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        info: 'bg-slate-800 text-white',
+        warning: 'bg-amber-600 text-white'
+      };
+      toast.className = `${colors[type] || colors.info} px-4 py-2.5 rounded-xl shadow-lg text-xs font-bold max-w-md w-full text-center transition-all duration-300`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3400);
+    }
+
+    /**
+     * Tone.js でビープ音・重複警告音を再生（外部音源URL不要）
+     */
+    async function playFeedbackSound(mode = 'success') {
+      try {
+        if (navigator.vibrate) {
+          if (mode === 'success') navigator.vibrate([60]);
+          else if (mode === 'duplicate') navigator.vibrate([120, 60, 120]);
+          else navigator.vibrate([200]);
+        }
+        await Tone.start();
+        const synth = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.1 }
+        }).toDestination();
+
+        if (mode === 'success') {
+          synth.triggerAttackRelease('C6', '16n');
+        } else if (mode === 'duplicate') {
+          // 重複検知時は2音で注意喚起（ピ・ポー）
+          const now = Tone.now();
+          synth.triggerAttackRelease('A5', '16n', now);
+          synth.triggerAttackRelease('E5', '8n', now + 0.12);
+        } else {
+          synth.triggerAttackRelease('G3', '8n');
+        }
+      } catch (e) {}
+    }
+
+    /**
+     * タブ切り替え（スキャン登録 / 本棚を探す）
+     */
+    function switchTab(tabName) {
+      const scanView = document.getElementById('view-scan');
+      const searchView = document.getElementById('view-search');
+      const navScan = document.getElementById('nav-scan');
+      const navSearch = document.getElementById('nav-search');
+
+      if (tabName === 'scan') {
+        scanView.classList.remove('hidden');
+        searchView.classList.add('hidden');
+        navScan.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
+        navSearch.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+      } else {
+        if (isScannerRunning) stopScanner();
+        scanView.classList.add('hidden');
+        searchView.classList.remove('hidden');
+        navSearch.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
+        navScan.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+        renderSearchFilterChips();
+        renderBooksGrid();
+      }
+    }
+
+    /**
+     * =====================================================================
+     * 部屋・本棚の2階層選択と新規追加ロジック
+     * =====================================================================
+     */
+    function renderRoomAndShelfSelectors() {
+      const uniqueRooms = [...new Set(locationMaster.map(item => item.room))];
+      if (!uniqueRooms.includes(currentRoom) && uniqueRooms.length > 0) {
+        currentRoom = uniqueRooms[0];
+      }
+
+      // 部屋チップ描画
+      const roomContainer = document.getElementById('room-presets');
+      roomContainer.innerHTML = uniqueRooms.map(room => {
+        const isSelected = room === currentRoom;
+        const style = isSelected
+          ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+        return `
+          <button onclick="selectRoom('${escapeHtml(room)}')"
+            class="px-3 py-2 rounded-xl border text-xs font-bold transition active:scale-95 ${style}">
+            🚪 ${escapeHtml(room)}
+          </button>
+        `;
+      }).join('');
+
+      // 選択中の部屋に属する本棚リストを取得
+      const shelvesInRoom = locationMaster
+        .filter(item => item.room === currentRoom)
+        .map(item => item.shelf);
+
+      if (!shelvesInRoom.includes(currentShelf) && shelvesInRoom.length > 0) {
+        currentShelf = shelvesInRoom[0];
+      }
+
+      document.getElementById('current-room-label').textContent = currentRoom;
+
+      // 本棚チップ描画
+      const shelfContainer = document.getElementById('shelf-presets');
+      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
+        const isSelected = shelf === currentShelf;
+        const style = isSelected
+          ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+          : 'bg-teal-50/50 text-teal-900 border-teal-200/80 hover:bg-teal-100/70';
+        return `
+          <button onclick="selectShelf('${escapeHtml(shelf)}')"
+            class="px-3 py-2 rounded-xl border text-xs font-bold transition active:scale-95 ${style}">
+            🗄️ ${escapeHtml(shelf)}
+          </button>
+        `;
+      }).join('');
+
+      document.getElementById('selected-location-badge').textContent = `${currentRoom} ＞ ${currentShelf}`;
+    }
+
+    function selectRoom(room) {
+      currentRoom = room;
+      const firstShelf = locationMaster.find(item => item.room === room);
+      if (firstShelf) currentShelf = firstShelf.shelf;
+      renderRoomAndShelfSelectors();
+    }
+
+    function selectShelf(shelf) {
+      currentShelf = shelf;
+      renderRoomAndShelfSelectors();
+    }
+
+    function toggleNewRoomForm() {
+      document.getElementById('new-room-form').classList.toggle('hidden');
+    }
+
+    function toggleNewShelfForm() {
+      document.getElementById('new-shelf-form').classList.toggle('hidden');
+    }
+
+    async function addNewRoomAndShelf() {
+      const roomInput = document.getElementById('input-new-room');
+      const shelfInput = document.getElementById('input-new-room-shelf');
+      const room = roomInput.value.trim();
+      const shelf = shelfInput.value.trim();
+
+      if (!room || !shelf) {
+        showToast('部屋名と最初の本棚名の両方を入力してください', 'warning');
+        return;
+      }
+
+      await persistNewLocation(room, shelf);
+      roomInput.value = '';
+      shelfInput.value = '';
+      toggleNewRoomForm();
+    }
+
+    async function addNewShelfToCurrentRoom() {
+      const shelfInput = document.getElementById('input-new-shelf');
+      const shelf = shelfInput.value.trim();
+      if (!shelf) {
+        showToast('追加する本棚名を入力してください', 'warning');
+        return;
+      }
+
+      await persistNewLocation(currentRoom, shelf);
+      shelfInput.value = '';
+      toggleNewShelfForm();
+    }
+
+    /**
+     * 新しい「部屋＋本棚」をローカル＆登録用GASのLocationsシートへ保存
+     */
+    async function persistNewLocation(room, shelf) {
+      const exists = locationMaster.some(item => item.room === room && item.shelf === shelf);
+      if (!exists) {
+        locationMaster.push({ room, shelf });
+      }
+      currentRoom = room;
+      currentShelf = shelf;
+      renderRoomAndShelfSelectors();
+      showToast(`「${room} ＞ ${shelf}」を追加・選択しました`, 'success');
+
+      if (registerGasUrl && registerGasUrl.startsWith('http')) {
+        try {
+          const res = await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'addLocation',
+              room: room,
+              shelf: shelf
+            })
+          });
+          const data = await res.json();
+          if (data.status === 'success' && Array.isArray(data.locations)) {
+            locationMaster = data.locations;
+            renderRoomAndShelfSelectors();
+          }
+        } catch (err) {
+          console.error('Failed to sync location to GAS:', err);
+        }
+      }
+    }
+
+    /**
+     * =====================================================================
+     * バーコードスキャナー制御
+     * =====================================================================
+     */
+    async function startScanner() {
+      if (isScannerRunning) return;
+
+      const placeholder = document.getElementById('camera-placeholder');
+      const btnStart = document.getElementById('btn-start-camera');
+      const btnStop = document.getElementById('btn-stop-camera');
+
+      try {
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader");
+        }
+
+        const config = {
+          fps: 12,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const width = Math.min(viewfinderWidth * 0.85, 340);
+            const height = Math.min(viewfinderHeight * 0.45, 140);
+            return { width: Math.floor(width), height: Math.floor(height) };
+          },
+          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13]
+        };
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          onBarcodeDetected,
+          () => {}
+        );
+
+        isScannerRunning = true;
+        placeholder.classList.add('hidden');
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        showToast('カメラを起動しました。上の段の978バーコードを映してください', 'info');
+      } catch (err) {
+        console.error('Camera start error:', err);
+        showToast('カメラを起動できませんでした。権限設定またはHTTPS環境を確認してください', 'error');
+      }
+    }
+
+    async function stopScanner() {
+      if (!html5QrCode || !isScannerRunning) return;
+      try {
+        await html5QrCode.stop();
+        isScannerRunning = false;
+        document.getElementById('camera-placeholder').classList.remove('hidden');
+        document.getElementById('btn-start-camera').classList.remove('hidden');
+        document.getElementById('btn-stop-camera').classList.add('hidden');
+      } catch (err) {
+        console.error('Camera stop error:', err);
+      }
+    }
+
+    function onBarcodeDetected(decodedText) {
+      const cleaned = decodedText.replace(/[^0-9]/g, '');
+      // 2段バーコードの下段(192...)を除外し、978/979始まりの13桁ISBNのみ通す
+      if (!/^(978|979)\d{10}$/.test(cleaned)) {
+        return;
+      }
+
+      const now = Date.now();
+      if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+        return;
+      }
+      if (isProcessingScan || pendingDuplicateData !== null) {
+        return;
+      }
+
+      lastScannedIsbn = cleaned;
+      lastScannedTime = now;
+      registerBookByIsbn(cleaned, false);
+    }
+
+    function handleManualIsbnSubmit() {
+      const input = document.getElementById('manual-isbn-input');
+      const cleaned = input.value.replace(/[^0-9]/g, '');
+      if (!/^(978|979)\d{10}$/.test(cleaned)) {
+        showToast('978または979から始まる13桁の数字を入力してください', 'warning');
+        return;
+      }
+      input.value = '';
+      registerBookByIsbn(cleaned, false);
+    }
+
+    function simulateSampleScan(triggerDuplicate) {
+      if (triggerDuplicate && allBooks.length > 0) {
+        // すでに登録されている1冊目のISBNをわざとスキャンして重複アラートをテスト
+        registerBookByIsbn(allBooks[0].isbn, false);
+        return;
+      }
+      const sampleIsbns = ["9784798142470", "9784297132880", "9784873119755", "9784150110000"];
+      const randomIsbn = sampleIsbns[Math.floor(Math.random() * sampleIsbns.length)];
+      registerBookByIsbn(randomIsbn, false);
+    }
+
+    /**
+     * =====================================================================
+     * 書籍登録リクエスト（重複チェック＆2冊目確認アラート付き）
+     * =====================================================================
+     */
+    async function registerBookByIsbn(isbn, forceDuplicate = false) {
+      isProcessingScan = true;
+      const badge = document.getElementById('scan-processing-badge');
+      const badgeText = document.getElementById('scan-processing-text');
+      badgeText.textContent = forceDuplicate
+        ? `2冊目以降としてスプレッドシートへ記録中...`
+        : `ISBN: ${isbn} の重複確認と書誌情報を取得中...`;
+      badge.classList.remove('hidden');
+
+      try {
+        if (registerGasUrl && registerGasUrl.startsWith('http')) {
+          // 【本番モード】登録用単独GASへPOST
+          const response = await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'register',
+              isbn: isbn,
+              room: currentRoom,
+              shelf: currentShelf,
+              forceDuplicate: forceDuplicate
+            })
+          });
+
+          const result = await response.json();
+
+          // 重複検知レスポンスが返ってきた場合 -> アラートモーダルを表示！
+          if (result.status === 'duplicate') {
+            playFeedbackSound('duplicate');
+            openDuplicateAlertModal(isbn, result.existingBooks, result.nextCopyNumber);
+            return;
+          }
+
+          if (result.status !== 'success') {
+            throw new Error(result.message || '登録用GASでエラーが発生しました');
+          }
+
+          onBookRegisteredSuccess(result.book);
+        } else {
+          // 【デモモード】ローカルの allBooks 内で重複チェックをシミュレート
+          const existingLocal = allBooks.filter(b => b.isbn === isbn);
+          if (existingLocal.length > 0 && !forceDuplicate) {
+            playFeedbackSound('duplicate');
+            openDuplicateAlertModal(isbn, existingLocal, existingLocal.length + 1);
+            return;
+          }
+
+          const demoBook = await fetchBookDemoFallback(isbn, currentRoom, currentShelf, existingLocal.length + 1);
+          onBookRegisteredSuccess(demoBook);
+        }
+      } catch (err) {
+        console.error('Register error:', err);
+        playFeedbackSound('error');
+        showToast(`登録エラー: ${err.message}`, 'error');
+      } finally {
+        isProcessingScan = false;
+        badge.classList.add('hidden');
+      }
+    }
+
+    /**
+     * 登録成功時のUI反映
+     */
+    function onBookRegisteredSuccess(book) {
+      playFeedbackSound('success');
+      sessionScannedBooks.unshift(book);
+      allBooks.unshift(book);
+
+      const existsLoc = locationMaster.some(l => l.room === book.room && l.shelf === book.shelf);
+      if (!existsLoc) {
+        locationMaster.push({ room: book.room, shelf: book.shelf });
+        renderRoomAndShelfSelectors();
+      }
+
+      renderSessionHistory();
+      const copyText = book.copyNumber > 1 ? `【${book.copyNumber}冊目】` : '';
+      showToast(`✅ ${copyText}『${book.title}』を【${book.room} ＞ ${book.shelf}】に登録しました`, 'success');
+    }
+
+    /**
+     * =====================================================================
+     * 重複スキャン検知＆2冊目確認アラートモーダル制御
+     * =====================================================================
+     */
+    function openDuplicateAlertModal(isbn, existingBooks, nextCopyNumber) {
+      pendingDuplicateData = { isbn, existingBooks, nextCopyNumber };
+
+      const firstBook = existingBooks[0] || {};
+      document.getElementById('dup-existing-count').textContent = existingBooks.length;
+      document.getElementById('dup-book-title').textContent = firstBook.title || `ISBN: ${isbn}`;
+      document.getElementById('dup-book-isbn').textContent = `ISBN: ${isbn}`;
+      document.getElementById('dup-next-copy-num').textContent = nextCopyNumber;
+      document.getElementById('dup-btn-copy-label').textContent = `${nextCopyNumber}冊目（複本）`;
+      document.getElementById('dup-target-loc').textContent = `${currentRoom} ＞ ${currentShelf}`;
+      document.getElementById('dup-move-target-loc').textContent = `${currentRoom} ＞ ${currentShelf}`;
+
+      // すでに登録されている1冊目・2冊目の場所リストを描画
+      const listContainer = document.getElementById('dup-existing-list');
+      listContainer.innerHTML = existingBooks.map((b, idx) => `
+        <div class="bg-white rounded-xl p-2.5 border border-amber-200/80 flex items-center justify-between gap-2 text-xs">
+          <div>
+            <span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] mr-1">
+              ${b.copyNumber || (idx + 1)}冊目
+            </span>
+            <span class="font-bold text-slate-800">${escapeHtml(b.room)} ＞ ${escapeHtml(b.shelf)}</span>
+          </div>
+          <span class="text-[10px] text-slate-400 shrink-0">${escapeHtml(b.timestamp.split(' ')[0] || '')}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('duplicate-alert-modal').classList.remove('hidden');
+    }
+
+    function closeDuplicateModal() {
+      document.getElementById('duplicate-alert-modal').classList.add('hidden');
+      pendingDuplicateData = null;
+    }
+
+    /**
+     * アラートモーダルから「2冊目（複本）として追加登録」を選択した時
+     */
+    async function confirmRegisterDuplicate() {
+      if (!pendingDuplicateData) return;
+      const targetIsbn = pendingDuplicateData.isbn;
+      closeDuplicateModal();
+      await registerBookByIsbn(targetIsbn, true);
+    }
+
+    /**
+     * アラートモーダルから「登録済みの1冊目を今の場所へ移動する」を選択した時
+     */
+    async function moveFirstExistingToCurrentLocation() {
+      if (!pendingDuplicateData || !pendingDuplicateData.existingBooks.length) return;
+      const targetBook = pendingDuplicateData.existingBooks[0];
+      const newRoom = currentRoom;
+      const newShelf = currentShelf;
+      closeDuplicateModal();
+
+      try {
+        if (registerGasUrl && registerGasUrl.startsWith('http')) {
+          const res = await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'updateBook',
+              id: targetBook.id,
+              room: newRoom,
+              shelf: newShelf
+            })
+          });
+          const data = await res.json();
+          if (data.status !== 'success') throw new Error(data.message);
+        }
+
+        // ローカル状態も更新
+        const inAll = allBooks.find(b => b.id === targetBook.id);
+        if (inAll) {
+          inAll.room = newRoom;
+          inAll.shelf = newShelf;
+        }
+        renderBooksGrid();
+        showToast(`📦 『${targetBook.title}』を【${newRoom} ＞ ${newShelf}】へ移動しました`, 'success');
+      } catch (err) {
+        showToast(`場所移動に失敗しました: ${err.message}`, 'error');
+      }
+    }
+
+    /**
+     * デモモード用フォールバック書誌取得
+     */
+    async function fetchBookDemoFallback(isbn, room, shelf, copyNumber) {
+      let title = `書籍 (ISBN: ${isbn})`;
+      let author = "著者不明";
+      let publisher = "";
+      let coverUrl = "";
+
+      try {
+        const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
+        const data = await res.json();
+        if (data && data[0] && data[0].summary) {
+          const s = data[0].summary;
+          title = s.title || title;
+          author = s.author || author;
+          publisher = s.publisher || "";
+          coverUrl = s.cover || `https://cover.openbd.jp/${isbn}.jpg`;
+        }
+      } catch (e) {}
+
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+      return {
+        id: 'demo-' + Date.now(),
+        timestamp,
+        isbn,
+        room,
+        shelf,
+        copyNumber,
+        title,
+        author,
+        publisher,
+        coverUrl,
+        note: ""
+      };
+    }
+
+    /**
+     * 今回スキャンした履歴リスト描画
+     */
+    function renderSessionHistory() {
+      const container = document.getElementById('session-history-list');
+      document.getElementById('session-count').textContent = sessionScannedBooks.length;
+      if (sessionScannedBooks.length === 0) return;
+
+      container.innerHTML = sessionScannedBooks.map(book => `
+        <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+          <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
+               onerror="this.onerror=null;this.src='https://placehold.co/120x170/e2e8f0/64748b?text=No+Cover';"
+               alt="表紙" class="w-11 h-16 object-cover rounded-lg bg-slate-200 shrink-0">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-1 mb-0.5">
+              <span class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[10px] font-bold">
+                ${escapeHtml(book.room)} ＞ ${escapeHtml(book.shelf)}
+              </span>
+              ${book.copyNumber > 1 ? `<span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${book.copyNumber}冊目</span>` : ''}
+            </div>
+            <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(book.title)}</p>
+            <p class="text-[11px] text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
+          </div>
+          <span class="text-[10px] font-mono text-slate-400 shrink-0">${book.timestamp.split(' ')[1] || ''}</span>
+        </div>
+      `).join('');
+    }
+
+    /**
+     * =====================================================================
+     * 蔵書探索（検索用単独GASからのデータ取得＆2段階絞り込み）
+     * =====================================================================
+     */
+    async function fetchAllBooks(showNotify = true) {
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+      // 検索用GASが設定されていればそちらを優先、無ければ登録用GASのdoGetを使用
+      const targetGetUrl = (searchGasUrl && searchGasUrl.startsWith('http'))
+        ? searchGasUrl
+        : ((registerGasUrl && registerGasUrl.startsWith('http')) ? registerGasUrl : '');
+
+      try {
+        if (targetGetUrl) {
+          const response = await fetch(targetGetUrl);
+          const result = await response.json();
+          if (result.status === 'success') {
+            if (Array.isArray(result.books)) {
+              allBooks = result.books;
+            }
+            if (Array.isArray(result.locations) && result.locations.length > 0) {
+              locationMaster = result.locations;
+            }
+            // 蔵書データ側にある部屋・本棚もマスタに統合
+            allBooks.forEach(b => {
+              if (b.room && b.shelf && !locationMaster.some(l => l.room === b.room && l.shelf === b.shelf)) {
+                locationMaster.push({ room: b.room, shelf: b.shelf });
+              }
+            });
+            renderRoomAndShelfSelectors();
+            if (showNotify) showToast(`スプレッドシートから${allBooks.length}冊の蔵書を読み込みました`, 'success');
+          }
+        } else {
+          if (allBooks.length === 0) {
+            allBooks = [...DEMO_INITIAL_BOOKS];
+          }
+          if (showNotify) showToast('デモデータを表示中です（API設定でスプレッドシートと連携できます）', 'info');
+        }
+      } catch (err) {
+        console.error('Fetch books error:', err);
+        if (showNotify) showToast('データの読み込みに失敗しました。GASの公開設定を確認してください', 'error');
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+        renderSearchFilterChips();
+        renderBooksGrid();
+      }
+    }
+
+    /**
+     * 探索ビューの「部屋」「本棚」2段階フィルタチップ描画
+     */
+    function renderSearchFilterChips() {
+      const roomContainer = document.getElementById('filter-room-chips');
+      const shelfContainer = document.getElementById('filter-shelf-chips');
+
+      const rooms = ['ALL', ...new Set(allBooks.map(b => b.room).filter(Boolean))];
+      roomContainer.innerHTML = rooms.map(room => {
+        const isActive = activeRoomFilter === room;
+        const count = room === 'ALL' ? allBooks.length : allBooks.filter(b => b.room === room).length;
+        const label = room === 'ALL' ? `すべての部屋 (${count})` : `🚪 ${room} (${count})`;
+        const style = isActive
+          ? 'bg-brand-600 text-white border-brand-600'
+          : 'bg-slate-100 text-slate-600 border-transparent hover:bg-slate-200';
+        return `
+          <button onclick="setRoomFilter('${escapeHtml(room)}')"
+            class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition ${style}">
+            ${escapeHtml(label)}
+          </button>
+        `;
+      }).join('');
+
+      // 選択中の部屋に応じた本棚リストを抽出
+      const booksInSelectedRoom = activeRoomFilter === 'ALL'
+        ? allBooks
+        : allBooks.filter(b => b.room === activeRoomFilter);
+
+      const shelves = ['ALL', ...new Set(booksInSelectedRoom.map(b => b.shelf).filter(Boolean))];
+      if (!shelves.includes(activeShelfFilter)) {
+        activeShelfFilter = 'ALL';
+      }
+
+      shelfContainer.innerHTML = shelves.map(shelf => {
+        const isActive = activeShelfFilter === shelf;
+        const count = shelf === 'ALL'
+          ? booksInSelectedRoom.length
+          : booksInSelectedRoom.filter(b => b.shelf === shelf).length;
+        const label = shelf === 'ALL' ? `すべての本棚 (${count})` : `🗄️ ${shelf} (${count})`;
+        const style = isActive
+          ? 'bg-teal-700 text-white border-teal-700'
+          : 'bg-teal-50 text-teal-800 border-teal-200/70 hover:bg-teal-100';
+        return `
+          <button onclick="setShelfFilter('${escapeHtml(shelf)}')"
+            class="px-3 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap transition ${style}">
+            ${escapeHtml(label)}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function setRoomFilter(room) {
+      activeRoomFilter = room;
+      activeShelfFilter = 'ALL';
+      renderSearchFilterChips();
+      renderBooksGrid();
+    }
+
+    function setShelfFilter(shelf) {
+      activeShelfFilter = shelf;
+      renderSearchFilterChips();
+      renderBooksGrid();
+    }
+
+    function toggleViewMode() {
+      isGridView = !isGridView;
+      renderBooksGrid();
+    }
+
+    /**
+     * 蔵書一覧カードの描画
+     */
+    function renderBooksGrid() {
+      const container = document.getElementById('books-container');
+      const query = document.getElementById('search-query-input').value.trim().toLowerCase();
+      const sortBy = document.getElementById('sort-select').value;
+
+      let filtered = allBooks.filter(book => {
+        if (activeRoomFilter !== 'ALL' && book.room !== activeRoomFilter) return false;
+        if (activeShelfFilter !== 'ALL' && book.shelf !== activeShelfFilter) return false;
+        if (!query) return true;
+        const target = `${book.title} ${book.author} ${book.publisher} ${book.isbn} ${book.room} ${book.shelf} ${book.note || ''}`.toLowerCase();
+        return target.includes(query);
+      });
+
+      filtered.sort((a, b) => {
+        if (sortBy === 'newest') return (b.timestamp || '').localeCompare(a.timestamp || '');
+        if (sortBy === 'oldest') return (a.timestamp || '').localeCompare(b.timestamp || '');
+        if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '', 'ja');
+        if (sortBy === 'location') {
+          return `${a.room}${a.shelf}`.localeCompare(`${b.room}${b.shelf}`, 'ja');
+        }
+        return 0;
+      });
+
+      document.getElementById('filtered-books-count').textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        container.className = 'block';
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-10 text-center border border-slate-200/80">
+            <p class="text-sm font-bold text-slate-700 mb-1">該当する蔵書が見つかりません</p>
+            <p class="text-xs text-slate-400">部屋・本棚の絞り込みや検索キーワードを変更してみてください。</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (isGridView) {
+        container.className = 'grid grid-cols-2 sm:grid-cols-3 gap-3';
+        container.innerHTML = filtered.map(book => `
+          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
+            class="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.98] transition cursor-pointer flex flex-col">
+            <div class="relative aspect-[3/4] bg-slate-100 overflow-hidden">
+              <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
+                   onerror="this.onerror=null;this.src='https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';"
+                   alt="${escapeHtml(book.title)}"
+                   class="w-full h-full object-cover">
+              ${book.copyNumber > 1 ? `
+                <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-xs">
+                  ${book.copyNumber}冊目
+                </span>
+              ` : ''}
+              <div class="absolute bottom-2 left-2 right-2 px-2 py-1 rounded-lg bg-slate-900/85 backdrop-blur-xs text-white text-[10px] leading-tight">
+                <div class="font-bold truncate">🚪 ${escapeHtml(book.room)}</div>
+                <div class="text-slate-300 truncate">🗄️ ${escapeHtml(book.shelf)}</div>
+              </div>
+            </div>
+            <div class="p-3 flex-1 flex flex-col justify-between">
+              <h3 class="text-xs font-bold text-slate-900 line-clamp-2 leading-snug mb-1">
+                ${escapeHtml(book.title)}
+              </h3>
+              <p class="text-[11px] text-slate-500 truncate">
+                ${escapeHtml(book.author || '著者不明')}
+              </p>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        container.className = 'space-y-2.5';
+        container.innerHTML = filtered.map(book => `
+          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
+            class="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.99] transition cursor-pointer flex items-center gap-3.5">
+            <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
+                 onerror="this.onerror=null;this.src='https://placehold.co/150x210/e2e8f0/64748b?text=No+Cover';"
+                 alt="${escapeHtml(book.title)}"
+                 class="w-14 h-20 object-cover rounded-xl bg-slate-100 shrink-0 border border-slate-100">
+            <div class="min-w-0 flex-1 space-y-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[11px] font-bold">
+                  🚪 ${escapeHtml(book.room)} ＞ 🗄️ ${escapeHtml(book.shelf)}
+                </span>
+                ${book.copyNumber > 1 ? `<span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${book.copyNumber}冊目</span>` : ''}
+              </div>
+              <h3 class="text-sm font-bold text-slate-900 line-clamp-1">${escapeHtml(book.title)}</h3>
+              <p class="text-xs text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    /**
+     * =====================================================================
+     * 書籍詳細モーダル（部屋・本棚の移動、メモ更新、削除）
+     * =====================================================================
+     */
+    function openBookDetailModal(bookId) {
+      const book = allBooks.find(b => b.id === bookId);
+      if (!book) return;
+      selectedBookForModal = book;
+
+      document.getElementById('modal-book-cover').src = getSafeCoverUrl(book.coverUrl, book.isbn);
+      document.getElementById('modal-book-cover').onerror = function() {
+        this.onerror = null;
+        this.src = 'https://placehold.co/240x340/e2e8f0/64748b?text=No+Cover';
+      };
+      document.getElementById('modal-book-location').textContent = `🚪 ${book.room} ＞ 🗄️ ${book.shelf}`;
+
+      const copyBadge = document.getElementById('modal-book-copy-badge');
+      if (book.copyNumber > 1) {
+        copyBadge.textContent = `${book.copyNumber}冊目（複本）`;
+        copyBadge.classList.remove('hidden');
+      } else {
+        copyBadge.classList.add('hidden');
+      }
+
+      document.getElementById('modal-book-title').textContent = book.title;
+      document.getElementById('modal-book-author').textContent = book.author || '著者不明';
+      document.getElementById('modal-book-publisher').textContent = book.publisher || '';
+      document.getElementById('modal-book-isbn').textContent = book.isbn;
+      document.getElementById('modal-book-timestamp').textContent = book.timestamp;
+      document.getElementById('modal-new-room').value = book.room;
+      document.getElementById('modal-new-shelf').value = book.shelf;
+      document.getElementById('modal-new-note').value = book.note || '';
+
+      hideDeleteConfirm();
+      document.getElementById('book-detail-modal').classList.remove('hidden');
+    }
+
+    function closeBookDetailModal() {
+      document.getElementById('book-detail-modal').classList.add('hidden');
+      selectedBookForModal = null;
+    }
+
+    async function updateBookDetails() {
+      if (!selectedBookForModal) return;
+      const newRoom = document.getElementById('modal-new-room').value.trim();
+      const newShelf = document.getElementById('modal-new-shelf').value.trim();
+      const newNote = document.getElementById('modal-new-note').value.trim();
+
+      if (!newRoom || !newShelf) {
+        showToast('部屋名と本棚名の両方を入力してください', 'warning');
+        return;
+      }
+
+      try {
+        if (registerGasUrl && registerGasUrl.startsWith('http')) {
+          const res = await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'updateBook',
+              id: selectedBookForModal.id,
+              room: newRoom,
+              shelf: newShelf,
+              note: newNote
+            })
+          });
+          const data = await res.json();
+          if (data.status !== 'success') throw new Error(data.message);
+        }
+
+        selectedBookForModal.room = newRoom;
+        selectedBookForModal.shelf = newShelf;
+        selectedBookForModal.note = newNote;
+
+        if (!locationMaster.some(l => l.room === newRoom && l.shelf === newShelf)) {
+          locationMaster.push({ room: newRoom, shelf: newShelf });
+          renderRoomAndShelfSelectors();
+        }
+        renderSearchFilterChips();
+        renderBooksGrid();
+        closeBookDetailModal();
+        showToast(`保管場所を「${newRoom} ＞ ${newShelf}」に更新しました`, 'success');
+      } catch (err) {
+        showToast(`更新に失敗しました: ${err.message}`, 'error');
+      }
+    }
+
+    function showDeleteConfirm() {
+      document.getElementById('btn-delete-step1').classList.add('hidden');
+      document.getElementById('delete-confirm-box').classList.remove('hidden');
+    }
+
+    function hideDeleteConfirm() {
+      document.getElementById('btn-delete-step1').classList.remove('hidden');
+      document.getElementById('delete-confirm-box').classList.add('hidden');
+    }
+
+    async function executeDeleteBook() {
+      if (!selectedBookForModal) return;
+      const targetId = selectedBookForModal.id;
+
+      try {
+        if (registerGasUrl && registerGasUrl.startsWith('http')) {
+          const res = await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              action: 'deleteBook',
+              id: targetId
+            })
+          });
+          const data = await res.json();
+          if (data.status !== 'success') throw new Error(data.message);
+        }
+
+        allBooks = allBooks.filter(b => b.id !== targetId);
+        sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== targetId);
+        renderSessionHistory();
+        renderSearchFilterChips();
+        renderBooksGrid();
+        closeBookDetailModal();
+        showToast('蔵書リストから削除しました', 'info');
+      } catch (err) {
+        showToast(`削除に失敗しました: ${err.message}`, 'error');
+      }
+    }
+
+    /**
+     * =====================================================================
+     * 単独GAS 2本の連携設定モーダル制御
+     * =====================================================================
+     */
+    function openSettingsModal() {
+      document.getElementById('register-gas-url-input').value = registerGasUrl;
+      document.getElementById('search-gas-url-input').value = searchGasUrl;
+      document.getElementById('settings-modal').classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    async function saveGasUrlSettings() {
+      registerGasUrl = document.getElementById('register-gas-url-input').value.trim();
+      searchGasUrl   = document.getElementById('search-gas-url-input').value.trim();
+      updateConnectionBadge();
+      closeSettingsModal();
+      await fetchAllBooks(true);
+    }
+
+    /**
+     * ユーティリティ
+     */
+    function getSafeCoverUrl(coverUrl, isbn) {
+      if (coverUrl && coverUrl.startsWith('http')) {
+        return coverUrl.replace(/^http:\/\//i, 'https://');
+      }
+      if (isbn) {
+        return `https://cover.openbd.jp/${isbn}.jpg`;
+      }
+      return 'https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
