@@ -728,6 +728,141 @@
 
     /**
      * =====================================================================
+     * ステップ1：「部屋」と「本棚」の2階層選択＆新規追加UI
+     * =====================================================================
+     */
+    function renderRoomAndShelfSelectors() {
+      const roomContainer = document.getElementById('room-presets');
+      const shelfContainer = document.getElementById('shelf-presets');
+      const rooms = [...new Set(locationMaster.map(item => item.room))];
+
+      if (!rooms.includes(currentRoom) && rooms.length > 0) {
+        currentRoom = rooms[0];
+      }
+
+      roomContainer.innerHTML = rooms.map(room => {
+        const isSelected = room === currentRoom;
+        const style = isSelected
+          ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200';
+        return `
+          <button onclick="selectRoom('${escapeHtml(room)}')"
+            class="px-3 py-1.5 rounded-xl border text-xs font-bold transition ${style}">
+            🚪 ${escapeHtml(room)}
+          </button>
+        `;
+      }).join('');
+
+      document.getElementById('current-room-label').textContent = currentRoom;
+
+      const shelvesInRoom = locationMaster
+        .filter(item => item.room === currentRoom)
+        .map(item => item.shelf);
+
+      if (!shelvesInRoom.includes(currentShelf) && shelvesInRoom.length > 0) {
+        currentShelf = shelvesInRoom[0];
+      }
+
+      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
+        const isSelected = shelf === currentShelf;
+        const style = isSelected
+          ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+          : 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100';
+        return `
+          <button onclick="selectShelf('${escapeHtml(shelf)}')"
+            class="px-3 py-1.5 rounded-xl border text-xs font-bold transition ${style}">
+            🗄️ ${escapeHtml(shelf)}
+          </button>
+        `;
+      }).join('');
+
+      document.getElementById('selected-location-badge').textContent = `${currentRoom} ＞ ${currentShelf}`;
+    }
+
+    function selectRoom(room) {
+      currentRoom = room;
+      const firstShelf = locationMaster.find(item => item.room === room);
+      if (firstShelf) currentShelf = firstShelf.shelf;
+      renderRoomAndShelfSelectors();
+    }
+
+    function selectShelf(shelf) {
+      currentShelf = shelf;
+      renderRoomAndShelfSelectors();
+    }
+
+    function toggleNewRoomForm() {
+      document.getElementById('new-room-form').classList.toggle('hidden');
+    }
+
+    function toggleNewShelfForm() {
+      document.getElementById('new-shelf-form').classList.toggle('hidden');
+    }
+
+    async function addNewRoomAndShelf() {
+      const roomInput = document.getElementById('input-new-room');
+      const shelfInput = document.getElementById('input-new-room-shelf');
+      const newRoom = roomInput.value.trim();
+      const newShelf = shelfInput.value.trim();
+
+      if (!newRoom || !newShelf) {
+        showToast('新しい部屋名と本棚名の両方を入力してください', 'warning');
+        return;
+      }
+
+      if (!locationMaster.some(l => l.room === newRoom && l.shelf === newShelf)) {
+        locationMaster.push({ room: newRoom, shelf: newShelf });
+      }
+      currentRoom = newRoom;
+      currentShelf = newShelf;
+      roomInput.value = '';
+      shelfInput.value = '';
+      toggleNewRoomForm();
+      renderRoomAndShelfSelectors();
+      showToast(`「${newRoom} ＞ ${newShelf}」を追加しました`, 'success');
+
+      if (registerGasUrl && registerGasUrl.startsWith('http')) {
+        try {
+          await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'addLocation', room: newRoom, shelf: newShelf })
+          });
+        } catch (e) {}
+      }
+    }
+
+    async function addNewShelfToCurrentRoom() {
+      const shelfInput = document.getElementById('input-new-shelf');
+      const newShelf = shelfInput.value.trim();
+
+      if (!newShelf) {
+        showToast('追加する本棚名を入力してください', 'warning');
+        return;
+      }
+
+      if (!locationMaster.some(l => l.room === currentRoom && l.shelf === newShelf)) {
+        locationMaster.push({ room: currentRoom, shelf: newShelf });
+      }
+      currentShelf = newShelf;
+      shelfInput.value = '';
+      toggleNewShelfForm();
+      renderRoomAndShelfSelectors();
+      showToast(`「${currentRoom}」に本棚「${newShelf}」を追加しました`, 'success');
+
+      if (registerGasUrl && registerGasUrl.startsWith('http')) {
+        try {
+          await fetch(registerGasUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'addLocation', room: currentRoom, shelf: newShelf })
+          });
+        } catch (e) {}
+      }
+    }
+
+    /**
+     * =====================================================================
      * バーコードスキャナー制御（iPadOS 高解像度・ズーム・2段バーコード対応）
      * =====================================================================
      */
@@ -929,84 +1064,6 @@
         badge.classList.add('hidden');
         showToast('写真からバーコードを読み取れませんでした。明るくピントが合った状態で再撮影してください', 'error');
       }
-    }
-
-    /**
-     * =====================================================================
-     * バーコードスキャナー制御
-     * =====================================================================
-     */
-    async function startScanner() {
-      if (isScannerRunning) return;
-
-      const placeholder = document.getElementById('camera-placeholder');
-      const btnStart = document.getElementById('btn-start-camera');
-      const btnStop = document.getElementById('btn-stop-camera');
-
-      try {
-        if (!html5QrCode) {
-          html5QrCode = new Html5Qrcode("reader");
-        }
-
-        const config = {
-          fps: 12,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const width = Math.min(viewfinderWidth * 0.85, 340);
-            const height = Math.min(viewfinderHeight * 0.45, 140);
-            return { width: Math.floor(width), height: Math.floor(height) };
-          },
-          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13]
-        };
-
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          config,
-          onBarcodeDetected,
-          () => {}
-        );
-
-        isScannerRunning = true;
-        placeholder.classList.add('hidden');
-        btnStart.classList.add('hidden');
-        btnStop.classList.remove('hidden');
-        showToast('カメラを起動しました。上の段の978バーコードを映してください', 'info');
-      } catch (err) {
-        console.error('Camera start error:', err);
-        showToast('カメラを起動できませんでした。権限設定またはHTTPS環境を確認してください', 'error');
-      }
-    }
-
-    async function stopScanner() {
-      if (!html5QrCode || !isScannerRunning) return;
-      try {
-        await html5QrCode.stop();
-        isScannerRunning = false;
-        document.getElementById('camera-placeholder').classList.remove('hidden');
-        document.getElementById('btn-start-camera').classList.remove('hidden');
-        document.getElementById('btn-stop-camera').classList.add('hidden');
-      } catch (err) {
-        console.error('Camera stop error:', err);
-      }
-    }
-
-    function onBarcodeDetected(decodedText) {
-      const cleaned = decodedText.replace(/[^0-9]/g, '');
-      // 2段バーコードの下段(192...)を除外し、978/979始まりの13桁ISBNのみ通す
-      if (!/^(978|979)\d{10}$/.test(cleaned)) {
-        return;
-      }
-
-      const now = Date.now();
-      if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
-        return;
-      }
-      if (isProcessingScan || pendingDuplicateData !== null) {
-        return;
-      }
-
-      lastScannedIsbn = cleaned;
-      lastScannedTime = now;
-      registerBookByIsbn(cleaned, false);
     }
 
     function handleManualIsbnSubmit() {
