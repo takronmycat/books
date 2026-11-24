@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hondana Scan - 教員用 蔵書スキャナー＆本棚検索</title>
+  <title>Hondana Scan - 蔵書登録＆本棚検索</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Inter & Noto Sans JP -->
@@ -499,8 +499,8 @@
      * 【重要】単独GAS 2本のウェブアプリURLをここに貼り付けてGitHubにPushすると、
      * どの端末から開いても最初からスプレッドシートと自動連携します。
      */
-    const DEFAULT_REGISTER_GAS_URL = ""; // RegisterApi.gs のデプロイURL
-    const DEFAULT_SEARCH_GAS_URL   = ""; // SearchApi.gs のデプロイURL
+    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/a/macros/mail.ibk.ed.jp/s/AKfycbwatCkGoOfULWxpRizgdiScVi5eXm0laBDweflis6bTxXkCjN_swEc82cBIv3QGefnaWA/exec"; // RegisterApi.gs のデプロイURL
+    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/a/macros/mail.ibk.ed.jp/s/AKfycbzq_AMQEdckBCQzgDKbnS_CxvBeFa6TIBC6E-JpDdjTZQDfs8QtnBKxuE4MjhENV0n91w/exec"; // SearchApi.gs のデプロイURL
 
     // URLパラメータ (?reg=...&search=...) からの上書きにも対応
     const urlParams = new URLSearchParams(window.location.search);
