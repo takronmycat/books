@@ -196,6 +196,13 @@
 
         <!-- カメラ操作ボタン ＆ 写真スキャン保険ボタン -->
         <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <button id="btn-permission-camera" onclick="requestCameraPermission()" class="sm:col-span-3 py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-[0.99] text-amber-900 border border-amber-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition">
+            <svg class="w-4 h-4 text-amber-700 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span id="camera-permission-label">カメラの使用を許可する（初回・権限確認）</span>
+          </button>
+
           <button id="btn-start-camera" onclick="startScanner()" class="sm:col-span-2 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -554,6 +561,43 @@
 
     // 重複スキャン確認モーダル用の一時保持データ
     let pendingDuplicateData = null;
+
+    /**
+     * 明示的にカメラ使用許可をブラウザへ要求する
+     */
+    async function requestCameraPermission() {
+      const label = document.getElementById('camera-permission-label');
+      const btn = document.getElementById('btn-permission-camera');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('このブラウザではカメラAPI（getUserMedia）を利用できません。「写真から読取」をお使いください', 'error');
+        return;
+      }
+
+      try {
+        if (label) label.textContent = 'カメラの許可を確認中...';
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+        // 許可確認のみが目的なので取得したストリームはすぐ停止して解放する
+        stream.getTracks().forEach(track => track.stop());
+
+        if (label) label.textContent = 'カメラの使用は許可されています（再確認可能）';
+        if (btn) {
+          btn.className = 'sm:col-span-3 py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.99] text-emerald-900 border border-emerald-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition';
+        }
+        showToast('カメラの使用が許可されました。「カメラを起動して連続スキャン」を押してください', 'success');
+      } catch (err) {
+        console.error('Camera permission error:', err);
+        if (label) label.textContent = 'カメラの使用を許可する（初回・権限確認）';
+        if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+          showToast('カメラの使用が拒否されました。ブラウザの設定からカメラを許可してください', 'error');
+        } else {
+          showToast('カメラの許可確認に失敗しました。接続や権限をご確認ください', 'error');
+        }
+      }
+    }
 
     /**
      * =====================================================================
