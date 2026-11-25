@@ -403,7 +403,7 @@
   </div>
 
   <!-- =====================================================================
-       モーダル2：書籍詳細＆場所移動・メモ編集・削除モーダル
+       モーダル2：書籍詳細＆タイトル・著者・場所移動・メモ編集・削除モーダル
   ====================================================================== -->
   <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
@@ -436,9 +436,19 @@
         <div class="flex justify-between"><span class="text-slate-400">登録日時:</span><span id="modal-book-timestamp"></span></div>
       </div>
 
-      <!-- 保管場所（部屋・本棚）の移動＆備考メモフォーム -->
+      <!-- タイトル・著者・保管場所（部屋・本棚）の編集＆備考メモフォーム -->
       <div class="pt-2 border-t border-slate-100 space-y-3">
-        <label class="block text-xs font-bold text-slate-700">別の部屋・本棚へ移動 / 備考メモを更新</label>
+        <label class="block text-xs font-bold text-slate-700">タイトル・著者・保管場所・備考メモを編集</label>
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">書名（タイトル）</span>
+          <input type="text" id="modal-new-title" placeholder="書名を入力（未登録本の入力・修正も可能）"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">著者名</span>
+          <input type="text" id="modal-new-author" placeholder="著者名を入力"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <span class="text-[10px] text-slate-400 font-bold">部屋名</span>
@@ -1389,7 +1399,8 @@
         }
 
         return `
-          <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
+            class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/80 transition cursor-pointer">
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                  data-isbn="${escapeHtml(book.isbn)}"
                  data-step="0"
@@ -1562,11 +1573,11 @@
 
     /**
      * =====================================================================
-     * 書籍詳細モーダル（部屋・本棚の移動、メモ更新、削除）
+     * 書籍詳細モーダル（タイトル・著者・部屋・本棚の移動、メモ更新、削除）
      * =====================================================================
      */
     function openBookDetailModal(bookId) {
-      const book = allBooks.find(b => b.id === bookId);
+      const book = allBooks.find(b => b.id === bookId) || sessionScannedBooks.find(b => b.id === bookId);
       if (!book) return;
       selectedBookForModal = book;
 
@@ -1591,6 +1602,11 @@
       document.getElementById('modal-book-publisher').textContent = book.publisher || '';
       document.getElementById('modal-book-isbn').textContent = book.isbn;
       document.getElementById('modal-book-timestamp').textContent = book.timestamp;
+
+      // 「タイトル未登録 (ISBN: ...)」の場合は空欄にして手入力しやすくする
+      const isUnregisteredTitle = !book.title || /^タイトル未登録/.test(book.title);
+      document.getElementById('modal-new-title').value = isUnregisteredTitle ? '' : book.title;
+      document.getElementById('modal-new-author').value = book.author || '';
       document.getElementById('modal-new-room').value = book.room;
       document.getElementById('modal-new-shelf').value = book.shelf;
       document.getElementById('modal-new-note').value = book.note || '';
@@ -1606,6 +1622,8 @@
 
     async function updateBookDetails() {
       if (!selectedBookForModal) return;
+      const rawTitle = document.getElementById('modal-new-title').value.trim();
+      const newAuthor = document.getElementById('modal-new-author').value.trim();
       const newRoom = document.getElementById('modal-new-room').value.trim();
       const newShelf = document.getElementById('modal-new-shelf').value.trim();
       const newNote = document.getElementById('modal-new-note').value.trim();
@@ -1615,6 +1633,8 @@
         return;
       }
 
+      const finalTitle = rawTitle || selectedBookForModal.title || `タイトル未登録 (ISBN: ${selectedBookForModal.isbn})`;
+
       try {
         if (registerGasUrl && registerGasUrl.startsWith('http')) {
           const res = await fetch(registerGasUrl, {
@@ -1623,6 +1643,8 @@
             body: JSON.stringify({
               action: 'updateBook',
               id: selectedBookForModal.id,
+              title: finalTitle,
+              author: newAuthor,
               room: newRoom,
               shelf: newShelf,
               note: newNote
@@ -1632,18 +1654,38 @@
           if (data.status !== 'success') throw new Error(data.message);
         }
 
+        selectedBookForModal.title = finalTitle;
+        selectedBookForModal.author = newAuthor;
         selectedBookForModal.room = newRoom;
         selectedBookForModal.shelf = newShelf;
         selectedBookForModal.note = newNote;
+
+        const inAll = allBooks.find(b => b.id === selectedBookForModal.id);
+        if (inAll && inAll !== selectedBookForModal) {
+          inAll.title = finalTitle;
+          inAll.author = newAuthor;
+          inAll.room = newRoom;
+          inAll.shelf = newShelf;
+          inAll.note = newNote;
+        }
+        const inSession = sessionScannedBooks.find(b => b.id === selectedBookForModal.id);
+        if (inSession && inSession !== selectedBookForModal) {
+          inSession.title = finalTitle;
+          inSession.author = newAuthor;
+          inSession.room = newRoom;
+          inSession.shelf = newShelf;
+          inSession.note = newNote;
+        }
 
         if (!locationMaster.some(l => l.room === newRoom && l.shelf === newShelf)) {
           locationMaster.push({ room: newRoom, shelf: newShelf });
           renderRoomAndShelfSelectors();
         }
+        renderSessionHistory();
         renderSearchFilterChips();
         renderBooksGrid();
         closeBookDetailModal();
-        showToast(`保管場所を「${newRoom} ＞ ${newShelf}」に更新しました`, 'success');
+        showToast(`『${finalTitle}』の情報を更新しました`, 'success');
       } catch (err) {
         showToast(`更新に失敗しました: ${err.message}`, 'error');
       }
