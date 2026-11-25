@@ -1211,7 +1211,7 @@
       let title = `デモ登録本 (ISBN: ${isbn})`;
       let author = '著者情報';
       let publisher = '';
-      let coverUrl = `https://cover.openbd.jp/${isbn}.jpg`;
+      let coverUrl = '';
       try {
         const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
         const json = await res.json();
@@ -1219,7 +1219,7 @@
           title = json[0].summary.title || title;
           author = json[0].summary.author || author;
           publisher = json[0].summary.publisher || '';
-          coverUrl = json[0].summary.cover || coverUrl;
+          coverUrl = json[0].summary.cover || '';
         }
       } catch (e) {}
 
@@ -1391,7 +1391,10 @@
         return `
           <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
-                 onerror="this.onerror=null;this.src='https://placehold.co/120x170/e2e8f0/64748b?text=No+Cover';"
+                 data-isbn="${escapeHtml(book.isbn)}"
+                 data-step="0"
+                 onload="handleCoverLoad(this)"
+                 onerror="handleCoverError(this)"
                  alt="表紙" class="w-11 h-16 object-cover rounded-lg bg-slate-200 shrink-0">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-1 mb-0.5">
@@ -1504,7 +1507,10 @@
             class="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.98] transition cursor-pointer flex flex-col">
             <div class="relative aspect-[3/4] bg-slate-100 overflow-hidden">
               <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
-                   onerror="this.onerror=null;this.src='https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';"
+                   data-isbn="${escapeHtml(book.isbn)}"
+                   data-step="0"
+                   onload="handleCoverLoad(this)"
+                   onerror="handleCoverError(this)"
                    alt="${escapeHtml(book.title)}"
                    class="w-full h-full object-cover">
               ${book.copyNumber > 1 ? `
@@ -1533,7 +1539,10 @@
           <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
             class="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.99] transition cursor-pointer flex items-center gap-3.5">
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
-                 onerror="this.onerror=null;this.src='https://placehold.co/150x210/e2e8f0/64748b?text=No+Cover';"
+                 data-isbn="${escapeHtml(book.isbn)}"
+                 data-step="0"
+                 onload="handleCoverLoad(this)"
+                 onerror="handleCoverError(this)"
                  alt="${escapeHtml(book.title)}"
                  class="w-14 h-20 object-cover rounded-xl bg-slate-100 shrink-0 border border-slate-100">
             <div class="min-w-0 flex-1 space-y-1">
@@ -1561,11 +1570,12 @@
       if (!book) return;
       selectedBookForModal = book;
 
-      document.getElementById('modal-book-cover').src = getSafeCoverUrl(book.coverUrl, book.isbn);
-      document.getElementById('modal-book-cover').onerror = function() {
-        this.onerror = null;
-        this.src = 'https://placehold.co/240x340/e2e8f0/64748b?text=No+Cover';
-      };
+      const modalCover = document.getElementById('modal-book-cover');
+      modalCover.dataset.isbn = book.isbn || '';
+      modalCover.dataset.step = '0';
+      modalCover.onload = function() { handleCoverLoad(this); };
+      modalCover.onerror = function() { handleCoverError(this); };
+      modalCover.src = getSafeCoverUrl(book.coverUrl, book.isbn);
       document.getElementById('modal-book-location').textContent = `🚪 ${book.room} ＞ 🗄️ ${book.shelf}`;
 
       const copyBadge = document.getElementById('modal-book-copy-badge');
@@ -1728,14 +1738,68 @@
       box.innerHTML = results.map(r => `<div>${escapeHtml(r)}</div>`).join('');
     }
 
+    function isbn13ToIsbn10(isbn13) {
+      const clean = String(isbn13 || '').replace(/[^0-9]/g, '');
+      if (clean.length !== 13 || !clean.startsWith('978')) return '';
+      const body = clean.slice(3, 12);
+      let sum = 0;
+      for (let i = 0; i < 9; i++) {
+        sum += parseInt(body[i], 10) * (10 - i);
+      }
+      const rem = 11 - (sum % 11);
+      const check = rem === 10 ? 'X' : (rem === 11 ? '0' : String(rem));
+      return body + check;
+    }
+
+    function getCoverCandidateUrls(isbn) {
+      const clean = String(isbn || '').replace(/[^0-9]/g, '');
+      if (!clean) return [];
+      const isbn10 = isbn13ToIsbn10(clean);
+      const list = [
+        `https://ndlsearch.ndl.go.jp/thumbnail/${clean}.jpg`
+      ];
+      if (isbn10) {
+        list.push(`https://ndlsearch.ndl.go.jp/thumbnail/${isbn10}.jpg`);
+      }
+      list.push(`https://cover.openbd.jp/${clean}.jpg`);
+      list.push(`https://covers.openlibrary.org/b/isbn/${clean}-M.jpg?default=false`);
+      return list;
+    }
+
     function getSafeCoverUrl(coverUrl, isbn) {
-      if (coverUrl && coverUrl.startsWith('http')) {
+      // 無効なopenbdデフォルトURL以外でDB保存済みURLがあれば最優先で試す
+      if (coverUrl && coverUrl.startsWith('http') && !coverUrl.includes('cover.openbd.jp')) {
         return coverUrl.replace(/^http:\/\//i, 'https://');
       }
-      if (isbn) {
-        return `https://cover.openbd.jp/${isbn}.jpg`;
+      const candidates = getCoverCandidateUrls(isbn);
+      return candidates[0] || 'https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';
+    }
+
+    function handleCoverLoad(imgEl) {
+      // 1x1の透明ダミー画像が返された場合は失敗扱いにして次のソースへ進める
+      if (imgEl.naturalWidth <= 2 || imgEl.naturalHeight <= 2) {
+        handleCoverError(imgEl);
       }
-      return 'https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';
+    }
+
+    function handleCoverError(imgEl) {
+      const isbn = imgEl.dataset.isbn || '';
+      const candidates = getCoverCandidateUrls(isbn);
+      let step = parseInt(imgEl.dataset.step || '0', 10);
+
+      // 現在表示中と同じURLをスキップしつつ次の候補へ進む
+      while (step < candidates.length && candidates[step] === imgEl.src) {
+        step++;
+      }
+
+      if (step < candidates.length) {
+        imgEl.dataset.step = String(step + 1);
+        imgEl.src = candidates[step];
+      } else {
+        imgEl.onload = null;
+        imgEl.onerror = null;
+        imgEl.src = 'https://placehold.co/300x420/e2e8f0/64748b?text=No+Cover';
+      }
     }
 
     function escapeHtml(str) {
