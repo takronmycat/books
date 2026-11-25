@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- html5-qrcode: スマホカメラでのバーコード（EAN-13 / ISBN）読み取り -->
+  <!-- html5-qrcode: スマホ・iPadカメラでのバーコード（EAN-13 / ISBN）読み取り -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Tone.js: 電子ビープ音・重複警告音生成 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
@@ -67,7 +67,7 @@
           </div>
           <div class="flex items-center gap-1.5 mt-0.5">
             <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
-            <span id="connection-label" class="text-[11px] font-medium text-slate-500">デモモード（GAS未接続）</span>
+            <span id="connection-label" class="text-[11px] font-medium text-slate-500">読み込み中...</span>
           </div>
         </div>
       </div>
@@ -161,9 +161,9 @@
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold uppercase tracking-wider text-brand-600 flex items-center gap-1.5">
             <span class="w-5 h-5 rounded-full bg-brand-100 text-brand-700 inline-flex items-center justify-center text-xs">2</span>
-            裏表紙のバーコード（978...）をスキャン
+            裏表紙のバーコード（978...）を連続スキャン
           </span>
-          <span class="text-[11px] text-slate-400">重複・2冊目自動検知</span>
+          <span class="text-[11px] text-slate-400">送信待ちゼロ・重複検知</span>
         </div>
 
         <!-- カメラプレビューコンテナ -->
@@ -178,7 +178,7 @@
               </svg>
             </div>
             <p class="text-sm font-semibold mb-1">カメラは停止中です</p>
-            <p class="text-xs text-slate-400 max-w-sm">iPadでは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。読み取りにくい場合は「写真から読み取る」も使えます。</p>
+            <p class="text-xs text-slate-400 max-w-sm">iPadでは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。送信中でも次の本を連続でかざせます。</p>
           </div>
 
           <!-- リアルタイム読取ガイド（下段192バーコード検知時など） -->
@@ -186,13 +186,13 @@
             下の段（価格コード）を検出中 → 少し上の段（978...）を枠に入れてください
           </div>
 
-          <!-- スキャン通信中オーバーレイ -->
+          <!-- スキャン通信中オーバーレイ（次の読取も継続可能） -->
           <div id="scan-processing-badge" class="hidden absolute top-3 left-3 right-3 bg-brand-600/95 text-white px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 text-xs font-semibold backdrop-blur-sm">
             <svg class="animate-spin h-4 w-4 text-white shrink-0" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span id="scan-processing-text">重複確認と書誌情報を取得中...</span>
+            <span id="scan-processing-text">登録中...</span>
           </div>
         </div>
 
@@ -302,7 +302,7 @@
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-room-chips"></div>
         </div>
 
-        <!-- フィルタ2段目：本棚チップ（部屋が選択されたとき、または全本棚から絞り込み） -->
+        <!-- フィルタ2段目：本棚チップ -->
         <div id="filter-shelf-wrapper" class="space-y-1 pt-1 border-t border-slate-100">
           <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">本棚で絞り込み</span>
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-shelf-chips"></div>
@@ -533,11 +533,10 @@
   ====================================================================== -->
   <script>
     /**
-     * 【重要】単独GAS 2本のウェブアプリURLをここに貼り付けてGitHubにPushすると、
-     * どの端末から開いても最初からスプレッドシートと自動連携します。
+     * 【重要】単独GAS 2本のウェブアプリURL（一般Googleアカウントデプロイ版を設定済み）
      */
-    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec"; // RegisterApi.gs のデプロイURL
-    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec"; // SearchApi.gs のデプロイURL
+    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec";
+    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec";
 
     // URLパラメータ (?reg=...&search=...) からの上書きにも対応
     const urlParams = new URLSearchParams(window.location.search);
@@ -556,7 +555,17 @@
     let currentRoom = "職員室";
     let currentShelf = "共通・教務キャビネット";
 
-    // スキャナー状態管理
+    // アプリ全体の蔵書データ＆セッション履歴
+    let allBooks = [];
+    let sessionScannedBooks = [];
+
+    // 探索画面のフィルタ・表示状態
+    let activeRoomFilter = 'ALL';
+    let activeShelfFilter = 'ALL';
+    let isGridView = true;
+    let selectedBookForModal = null;
+
+    // スキャナー・連続読取キュー状態管理
     let html5QrCode = null;
     let isScannerRunning = false;
     let scanQueue = [];
@@ -564,10 +573,163 @@
     let lastScannedIsbn = "";
     let lastScannedTime = 0;
     const SCAN_COOLDOWN_MS = 2800;
+    let liveHintTimer = null;
 
     // 重複スキャン確認モーダル用の一時保持データ
     let pendingDuplicateData = null;
-// ... existing code ... -->
+
+    /**
+     * =====================================================================
+     * 初期化処理
+     * =====================================================================
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      updateConnectionBadge();
+      renderRoomAndShelfSelectors();
+      renderSearchFilterChips();
+      fetchAllBooks(false);
+    });
+
+    function updateConnectionBadge() {
+      const dot = document.getElementById('connection-dot');
+      const label = document.getElementById('connection-label');
+      const hasReg = registerGasUrl && registerGasUrl.startsWith('http');
+      const hasSch = searchGasUrl && searchGasUrl.startsWith('http');
+
+      if (hasReg && hasSch) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        label.textContent = '登録GAS・検索GAS 両方連携中';
+      } else if (hasReg || hasSch) {
+        dot.className = 'w-2 h-2 rounded-full bg-sky-500';
+        label.textContent = 'GAS連携中（片側URL使用）';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+        label.textContent = 'デモモード（GAS未接続）';
+      }
+    }
+
+    /**
+     * スプレッドシートから全蔵書データと部屋・本棚マスタを取得
+     */
+    async function fetchAllBooks(showNotice = false) {
+      const targetUrl = (searchGasUrl && searchGasUrl.startsWith('http'))
+        ? searchGasUrl
+        : (registerGasUrl && registerGasUrl.startsWith('http') ? registerGasUrl : '');
+
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+      try {
+        if (targetUrl) {
+          const res = await fetch(targetUrl);
+          const data = await res.json();
+          if (data.status !== 'success') {
+            throw new Error(data.message || 'データ取得エラー');
+          }
+
+          if (Array.isArray(data.books)) {
+            allBooks = data.books;
+          }
+          if (Array.isArray(data.locations) && data.locations.length > 0) {
+            locationMaster = data.locations;
+            // 現在選択中の部屋・本棚がマスタに無ければ先頭に合わせる
+            if (!locationMaster.some(l => l.room === currentRoom)) {
+              currentRoom = locationMaster[0].room;
+              currentShelf = locationMaster[0].shelf;
+            } else if (!locationMaster.some(l => l.room === currentRoom && l.shelf === currentShelf)) {
+              const firstInRoom = locationMaster.find(l => l.room === currentRoom);
+              if (firstInRoom) currentShelf = firstInRoom.shelf;
+            }
+          }
+
+          renderRoomAndShelfSelectors();
+          renderSearchFilterChips();
+          renderBooksGrid();
+          if (showNotice) {
+            showToast(`最新データを読み込みました（全${allBooks.length}冊）`, 'success');
+          }
+        } else {
+          // 未接続時のデモデータ
+          if (allBooks.length === 0) {
+            allBooks = [
+              {
+                id: 'demo1',
+                timestamp: '2026/11/25 10:00:00',
+                isbn: '9784798142470',
+                room: '職員室',
+                shelf: '共通・教務キャビネット',
+                copyNumber: 1,
+                title: 'サンプル書籍（API設定からGASを連携してください）',
+                author: '教員蔵書システム',
+                publisher: 'サンプル出版',
+                coverUrl: '',
+                note: ''
+              }
+            ];
+          }
+          renderSearchFilterChips();
+          renderBooksGrid();
+        }
+      } catch (err) {
+        console.error('Fetch books error:', err);
+        if (showNotice) {
+          showToast(`データ読み込みに失敗しました: ${err.message}`, 'error');
+        }
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    /**
+     * =====================================================================
+     * 画面タブ切り替え ＆ 通知・効果音
+     * =====================================================================
+     */
+    function switchTab(tabName) {
+      const viewScan = document.getElementById('view-scan');
+      const viewSearch = document.getElementById('view-search');
+      const navScan = document.getElementById('nav-scan');
+      const navSearch = document.getElementById('nav-search');
+
+      if (tabName === 'scan') {
+        viewScan.classList.remove('hidden');
+        viewSearch.classList.add('hidden');
+        navScan.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
+        navSearch.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+      } else {
+        if (isScannerRunning) {
+          stopScanner();
+        }
+        viewScan.classList.add('hidden');
+        viewSearch.classList.remove('hidden');
+        navSearch.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
+        navScan.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+        renderSearchFilterChips();
+        renderBooksGrid();
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colorClass =
+        type === 'success' ? 'bg-emerald-600 text-white' :
+        type === 'warning' ? 'bg-amber-500 text-slate-950' :
+        type === 'error'   ? 'bg-rose-600 text-white' :
+                             'bg-slate-800 text-white';
+
+      toast.className = `pointer-events-auto max-w-md w-full px-4 py-3 rounded-2xl shadow-xl text-xs font-bold flex items-center justify-between gap-2 transition-all duration-300 ${colorClass}`;
+      toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 3600);
+    }
+
+    async function playFeedbackSound(mode) {
       try {
         if (navigator.vibrate) {
           if (mode === 'queued') navigator.vibrate([40]);
@@ -582,12 +744,10 @@
         }).toDestination();
 
         if (mode === 'queued') {
-          // 読み取り受付音（軽快な高音ピッ）
           synth.triggerAttackRelease('E6', '32n');
         } else if (mode === 'success') {
           synth.triggerAttackRelease('C6', '16n');
         } else if (mode === 'duplicate') {
-          // 重複検知時は2音で注意喚起（ピ・ポー）
           const now = Tone.now();
           synth.triggerAttackRelease('A5', '16n', now);
           synth.triggerAttackRelease('E5', '8n', now + 0.12);
@@ -596,11 +756,251 @@
         }
       } catch (e) {}
     }
-// ... existing code ... -->
+
+    /**
+     * =====================================================================
+     * 部屋＆本棚の2階層セレクター・新規追加
+     * =====================================================================
+     */
+    function renderRoomAndShelfSelectors() {
+      const roomContainer = document.getElementById('room-presets');
+      const shelfContainer = document.getElementById('shelf-presets');
+      const uniqueRooms = [...new Set(locationMaster.map(l => l.room))];
+
+      roomContainer.innerHTML = uniqueRooms.map(room => {
+        const active = room === currentRoom;
+        return `
+          <button onclick='selectRoom(${JSON.stringify(room)})'
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+              active
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }">
+            🚪 ${escapeHtml(room)}
+          </button>
+        `;
+      }).join('');
+
+      document.getElementById('current-room-label').textContent = currentRoom;
+
+      const shelvesInRoom = locationMaster
+        .filter(l => l.room === currentRoom)
+        .map(l => l.shelf);
+
+      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
+        const active = shelf === currentShelf;
+        return `
+          <button onclick='selectShelf(${JSON.stringify(shelf)})'
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+              active
+                ? 'bg-teal-700 text-white shadow-xs'
+                : 'bg-teal-50 text-teal-900 border border-teal-200/80 hover:bg-teal-100'
+            }">
+            🗄️ ${escapeHtml(shelf)}
+          </button>
+        `;
+      }).join('');
+
+      document.getElementById('selected-location-badge').textContent = `${currentRoom} ＞ ${currentShelf}`;
+    }
+
+    function selectRoom(room) {
+      currentRoom = room;
+      const shelves = locationMaster.filter(l => l.room === room);
+      if (shelves.length > 0 && !shelves.some(s => s.shelf === currentShelf)) {
+        currentShelf = shelves[0].shelf;
+      }
+      renderRoomAndShelfSelectors();
+    }
+
+    function selectShelf(shelf) {
+      currentShelf = shelf;
+      renderRoomAndShelfSelectors();
+    }
+
+    function toggleNewRoomForm() {
+      document.getElementById('new-room-form').classList.toggle('hidden');
+    }
+
+    function toggleNewShelfForm() {
+      document.getElementById('new-shelf-form').classList.toggle('hidden');
+    }
+
+    async function addNewRoomAndShelf() {
+      const roomInput = document.getElementById('input-new-room');
+      const shelfInput = document.getElementById('input-new-room-shelf');
+      const newRoom = roomInput.value.trim();
+      const newShelf = shelfInput.value.trim() || '本棚A';
+
+      if (!newRoom) {
+        showToast('新しい部屋名を入力してください', 'warning');
+        return;
+      }
+
+      if (!locationMaster.some(l => l.room === newRoom && l.shelf === newShelf)) {
+        locationMaster.push({ room: newRoom, shelf: newShelf });
+      }
+      currentRoom = newRoom;
+      currentShelf = newShelf;
+      roomInput.value = '';
+      shelfInput.value = '';
+      toggleNewRoomForm();
+      renderRoomAndShelfSelectors();
+      showToast(`「${newRoom} ＞ ${newShelf}」を追加しました`, 'success');
+      await saveNewLocationToGas(newRoom, newShelf);
+    }
+
+    async function addNewShelfToCurrentRoom() {
+      const shelfInput = document.getElementById('input-new-shelf');
+      const newShelf = shelfInput.value.trim();
+
+      if (!newShelf) {
+        showToast('新しい本棚名を入力してください', 'warning');
+        return;
+      }
+
+      if (!locationMaster.some(l => l.room === currentRoom && l.shelf === newShelf)) {
+        locationMaster.push({ room: currentRoom, shelf: newShelf });
+      }
+      currentShelf = newShelf;
+      shelfInput.value = '';
+      toggleNewShelfForm();
+      renderRoomAndShelfSelectors();
+      showToast(`「${currentRoom}」に「${newShelf}」を追加しました`, 'success');
+      await saveNewLocationToGas(currentRoom, newShelf);
+    }
+
+    async function saveNewLocationToGas(room, shelf) {
+      if (!registerGasUrl || !registerGasUrl.startsWith('http')) return;
+      try {
+        await fetch(registerGasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'addLocation', room, shelf })
+        });
+      } catch (e) {
+        console.error('Save location error:', e);
+      }
+    }
+
+    /**
+     * =====================================================================
+     * カメラバーコードリーダー制御（iPadOS 最適化版）
+     * =====================================================================
+     */
+    async function startScanner() {
+      if (isScannerRunning) return;
+
+      const placeholder = document.getElementById('camera-placeholder');
+      const btnStart = document.getElementById('btn-start-camera');
+      const btnStop = document.getElementById('btn-stop-camera');
+
+      try {
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader", {
+            formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true
+            },
+            verbose: false
+          });
+        }
+
+        const config = {
+          fps: 15,
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            const boxWidth = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
+            const boxHeight = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
+            return { width: Math.max(boxWidth, 240), height: Math.max(boxHeight, 95) };
+          },
+          aspectRatio: 1.777778,
+          videoConstraints: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        };
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          onScanSuccess,
+          () => {}
+        );
+
+        isScannerRunning = true;
+        placeholder.classList.add('hidden');
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+
+        // iPad背面カメラでズーム対応していればスライダーを表示し初期1.5xに設定
+        try {
+          const capabilities = html5QrCode.getRunningTrackCapabilities();
+          if (capabilities && capabilities.zoom) {
+            const zoomBar = document.getElementById('zoom-control-bar');
+            const slider = document.getElementById('camera-zoom-slider');
+            const minZ = capabilities.zoom.min || 1;
+            const maxZ = Math.min(capabilities.zoom.max || 3, 4);
+            const initZ = Math.min(Math.max(1.5, minZ), maxZ);
+            slider.min = minZ;
+            slider.max = maxZ;
+            slider.value = initZ;
+            zoomBar.classList.remove('hidden');
+            await handleZoomChange(initZ);
+          }
+        } catch (zoomErr) {}
+
+      } catch (err) {
+        console.error('Camera start error:', err);
+        showToast('カメラを起動できませんでした。Safariのカメラ許可を確認するか「写真から読取」をお使いください', 'error');
+      }
+    }
+
+    async function handleZoomChange(val) {
+      document.getElementById('zoom-value-label').textContent = Number(val).toFixed(1);
+      if (!html5QrCode || !isScannerRunning) return;
+      try {
+        await html5QrCode.applyVideoConstraints({
+          advanced: [{ zoom: Number(val) }]
+        });
+      } catch (e) {}
+    }
+
+    async function stopScanner() {
+      if (!html5QrCode || !isScannerRunning) return;
+      try {
+        await html5QrCode.stop();
+      } catch (e) {}
+      isScannerRunning = false;
+      document.getElementById('camera-placeholder').classList.remove('hidden');
+      document.getElementById('btn-start-camera').classList.remove('hidden');
+      document.getElementById('btn-stop-camera').classList.add('hidden');
+      document.getElementById('zoom-control-bar').classList.add('hidden');
+      document.getElementById('scan-live-hint').classList.add('hidden');
+    }
+
+    function onScanSuccess(decodedText) {
+      const cleaned = String(decodedText || '').replace(/[^0-9]/g, '');
+
+      // 下段の日本図書コード(192...)を拾った場合は画面上にリアルタイム誘導を出す
+      if (/^192\d{10}$/.test(cleaned)) {
+        const hint = document.getElementById('scan-live-hint');
+        hint.classList.remove('hidden');
+        clearTimeout(liveHintTimer);
+        liveHintTimer = setTimeout(() => hint.classList.add('hidden'), 1800);
+        return;
+      }
+
+      // 978 または 979 から始まる13桁ISBNのみ受け付け
+      if (!/^(978|979)\d{10}$/.test(cleaned)) {
+        return;
+      }
+
       const now = Date.now();
       if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
         return;
       }
+
       // 重複確認モーダルが開いている最中のみ一時停止（通常の通信中は次々キューに入れる）
       if (pendingDuplicateData !== null) {
         return;
@@ -608,6 +1008,7 @@
 
       lastScannedIsbn = cleaned;
       lastScannedTime = now;
+      document.getElementById('scan-live-hint').classList.add('hidden');
       enqueueBookScan(cleaned, false);
     }
 
@@ -667,7 +1068,6 @@
 
     function simulateSampleScan(triggerDuplicate) {
       if (triggerDuplicate && allBooks.length > 0) {
-        // すでに登録されている1冊目のISBNをわざとスキャンして重複アラートをテスト
         enqueueBookScan(allBooks[0].isbn, false);
         return;
       }
@@ -686,13 +1086,11 @@
       const targetShelf = overrideShelf || currentShelf;
       const tempId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
 
-      // スキャンした瞬間に受付音を鳴らし、次の本へすぐ移れるようにする
       playFeedbackSound('queued');
 
       const now = new Date();
       const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
-      // セッション履歴に仮カードを即時表示（スキャン済みの手応えを可視化）
       sessionScannedBooks.unshift({
         id: tempId,
         isPending: true,
@@ -735,16 +1133,12 @@
       badge.classList.remove('hidden');
     }
 
-    /**
-     * バックグラウンドでキューを1件ずつ順番に処理するワーカー
-     */
     async function processScanQueue() {
       if (isQueueWorkerRunning) return;
       isQueueWorkerRunning = true;
 
       try {
         while (scanQueue.length > 0) {
-          // 重複確認モーダルが開いている間は一時停止し、選択後に再開する
           if (pendingDuplicateData !== null) {
             break;
           }
@@ -769,7 +1163,6 @@
               const result = await response.json();
 
               if (result.status === 'duplicate') {
-                // 仮カードを一旦取り除き、重複確認モーダルを表示してキューを一時停止
                 sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== task.tempId);
                 renderSessionHistory();
                 playFeedbackSound('duplicate');
@@ -783,7 +1176,6 @@
 
               onBookRegisteredSuccess(result.book, task.tempId);
             } else {
-              // デモモード
               const existingLocal = allBooks.filter(b => b.isbn === task.isbn);
               if (existingLocal.length > 0 && !task.forceDuplicate) {
                 sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== task.tempId);
@@ -815,9 +1207,40 @@
       }
     }
 
-    /**
-     * 登録成功時のUI反映（仮カードを本物の書誌データへ差し替え）
-     */
+    async function fetchBookDemoFallback(isbn, room, shelf, copyNumber) {
+      let title = `デモ登録本 (ISBN: ${isbn})`;
+      let author = '著者情報';
+      let publisher = '';
+      let coverUrl = `https://cover.openbd.jp/${isbn}.jpg`;
+      try {
+        const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
+        const json = await res.json();
+        if (json && json[0] && json[0].summary) {
+          title = json[0].summary.title || title;
+          author = json[0].summary.author || author;
+          publisher = json[0].summary.publisher || '';
+          coverUrl = json[0].summary.cover || coverUrl;
+        }
+      } catch (e) {}
+
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+      return {
+        id: 'demo-' + Date.now(),
+        timestamp,
+        isbn,
+        room,
+        shelf,
+        copyNumber,
+        title,
+        author,
+        publisher,
+        coverUrl,
+        note: ''
+      };
+    }
+
     function onBookRegisteredSuccess(book, tempId = null) {
       if (tempId) {
         const idx = sessionScannedBooks.findIndex(b => b.id === tempId);
@@ -860,7 +1283,6 @@
       document.getElementById('dup-target-loc').textContent = `${targetRoom} ＞ ${targetShelf}`;
       document.getElementById('dup-move-target-loc').textContent = `${targetRoom} ＞ ${targetShelf}`;
 
-      // すでに登録されている1冊目・2冊目の場所リストを描画
       const listContainer = document.getElementById('dup-existing-list');
       listContainer.innerHTML = existingBooks.map((b, idx) => `
         <div class="bg-white rounded-xl p-2.5 border border-amber-200/80 flex items-center justify-between gap-2 text-xs">
@@ -870,7 +1292,7 @@
             </span>
             <span class="font-bold text-slate-800">${escapeHtml(b.room)} ＞ ${escapeHtml(b.shelf)}</span>
           </div>
-          <span class="text-[10px] text-slate-400 shrink-0">${escapeHtml(b.timestamp.split(' ')[0] || '')}</span>
+          <span class="text-[10px] text-slate-400 shrink-0">${escapeHtml((b.timestamp || '').split(' ')[0] || '')}</span>
         </div>
       `).join('');
 
@@ -880,13 +1302,9 @@
     function closeDuplicateModal() {
       document.getElementById('duplicate-alert-modal').classList.add('hidden');
       pendingDuplicateData = null;
-      // 待機中のキューが残っていれば再開
       processScanQueue();
     }
 
-    /**
-     * アラートモーダルから「2冊目（複本）として追加登録」を選択した時
-     */
     async function confirmRegisterDuplicate() {
       if (!pendingDuplicateData) return;
       const { isbn, targetRoom, targetShelf } = pendingDuplicateData;
@@ -895,9 +1313,6 @@
       enqueueBookScan(isbn, true, targetRoom, targetShelf);
     }
 
-    /**
-     * アラートモーダルから「登録済みの1冊目を今の場所へ移動する」を選択した時
-     */
     async function moveFirstExistingToCurrentLocation() {
       if (!pendingDuplicateData || !pendingDuplicateData.existingBooks.length) return;
       const targetBook = pendingDuplicateData.existingBooks[0];
@@ -922,7 +1337,6 @@
           if (data.status !== 'success') throw new Error(data.message);
         }
 
-        // ローカル状態も更新
         const inAll = allBooks.find(b => b.id === targetBook.id);
         if (inAll) {
           inAll.room = newRoom;
@@ -936,14 +1350,19 @@
         processScanQueue();
       }
     }
-// ... existing code ... -->
+
     /**
-     * 今回スキャンした履歴リスト描画
+     * =====================================================================
+     * セッション履歴 ＆ 蔵書探索・フィルタ描画
+     * =====================================================================
      */
     function renderSessionHistory() {
       const container = document.getElementById('session-history-list');
       document.getElementById('session-count').textContent = sessionScannedBooks.length;
-      if (sessionScannedBooks.length === 0) return;
+      if (sessionScannedBooks.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">まだスキャン履歴はありません。上のカメラから本を読み取ってください。</p>`;
+        return;
+      }
 
       container.innerHTML = sessionScannedBooks.map(book => {
         if (book.isPending) {
@@ -984,10 +1403,44 @@
               <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(book.title)}</p>
               <p class="text-[11px] text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
             </div>
-            <span class="text-[10px] font-mono text-slate-400 shrink-0">${book.timestamp.split(' ')[1] || ''}</span>
+            <span class="text-[10px] font-mono text-slate-400 shrink-0">${(book.timestamp || '').split(' ')[1] || ''}</span>
           </div>
         `;
       }).join('');
+    }
+
+    function renderSearchFilterChips() {
+      const roomContainer = document.getElementById('filter-room-chips');
+      const shelfContainer = document.getElementById('filter-shelf-chips');
+      if (!roomContainer || !shelfContainer) return;
+
+      const rooms = [...new Set([
+        ...locationMaster.map(l => l.room),
+        ...allBooks.map(b => b.room).filter(Boolean)
+      ])];
+
+      roomContainer.innerHTML = [
+        `<button onclick="setRoomFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === 'ALL' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">すべて</button>`,
+        ...rooms.map(r => `
+          <button onclick='setRoomFilter(${JSON.stringify(r)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === r ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+            🚪 ${escapeHtml(r)}
+          </button>
+        `)
+      ].join('');
+
+      const shelves = [...new Set([
+        ...locationMaster.filter(l => activeRoomFilter === 'ALL' || l.room === activeRoomFilter).map(l => l.shelf),
+        ...allBooks.filter(b => activeRoomFilter === 'ALL' || b.room === activeRoomFilter).map(b => b.shelf).filter(Boolean)
+      ])];
+
+      shelfContainer.innerHTML = [
+        `<button onclick="setShelfFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === 'ALL' ? 'bg-teal-700 text-white' : 'bg-teal-50 text-teal-800 hover:bg-teal-100'}">すべての棚</button>`,
+        ...shelves.map(s => `
+          <button onclick='setShelfFilter(${JSON.stringify(s)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === s ? 'bg-teal-700 text-white' : 'bg-teal-50 text-teal-800 hover:bg-teal-100'}">
+            🗄️ ${escapeHtml(s)}
+          </button>
+        `)
+      ].join('');
     }
 
     function setRoomFilter(room) {
@@ -1008,9 +1461,6 @@
       renderBooksGrid();
     }
 
-    /**
-     * 蔵書一覧カードの描画
-     */
     function renderBooksGrid() {
       const container = document.getElementById('books-container');
       const query = document.getElementById('search-query-input').value.trim().toLowerCase();
@@ -1252,9 +1702,6 @@
       await fetchAllBooks(true);
     }
 
-    /**
-     * 登録用GAS・検索用GASの疎通テスト
-     */
     async function testGasConnections() {
       const regUrl = document.getElementById('register-gas-url-input').value.trim();
       const schUrl = document.getElementById('search-gas-url-input').value.trim();
