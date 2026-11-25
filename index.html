@@ -28,34 +28,22 @@
               500: '#6366f1',
               600: '#4f46e5',
               700: '#4338ca',
-              900: '#312e81',
-            }
+            900: '#312e81',
           }
         }
       }
     }
   </script>
-  <style>
-    /* iPad Safari でカメラ映像が枠いっぱいに鮮明表示されるよう調整 */
-    #reader video {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover !important;
-    }
-    #reader__scan_region {
-      min-height: 100% !important;
-    }
-  </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-24">
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-10">
 
   <!-- =====================================================================
-       ヘッダー：タイトル・接続モード表示・GAS連携設定ボタン
+       ヘッダー：タイトル・画面切替タブ
   ====================================================================== -->
-  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3">
-    <div class="max-w-3xl mx-auto flex items-center justify-between">
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-2.5">
+    <div class="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
       <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm">
+        <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
           </svg>
@@ -63,10 +51,25 @@
         <div>
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900">Hondana Scan</h1>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">教員蔵書</span>
           </div>
         </div>
       </div>
+
+      <!-- ヘッダー内タブ切り替えボタン -->
+      <nav aria-label="画面切り替え" class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:w-auto border border-slate-200">
+        <button id="nav-scan" onclick="switchTab('scan')" class="py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+          </svg>
+          <span>とうろく</span>
+        </button>
+        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <span>本をさがす</span>
+        </button>
+      </nav>
     </div>
   </header>
 
@@ -91,7 +94,7 @@
             登録先の「部屋」と「本棚」を選択
           </span>
           <span id="selected-location-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
-            職員室 ＞ 共通・教務キャビネット
+            未選択
           </span>
         </div>
 
@@ -125,7 +128,7 @@
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <div class="flex items-center justify-between">
             <label class="text-xs font-bold text-slate-600">
-              ② 「<span id="current-room-label" class="text-brand-700">職員室</span>」の中の本棚を選ぶ
+              ② 「<span id="current-room-label" class="text-brand-700">未選択</span>」の中の本棚を選ぶ
             </label>
             <button onclick="toggleNewShelfForm()" class="text-[11px] font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1">
               <span>＋ この部屋に本棚を追加</span>
@@ -322,26 +325,6 @@
     </section>
 
   </main>
-
-  <!-- =====================================================================
-       下部固定ナビゲーションバー
-  ====================================================================== -->
-  <nav class="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2">
-    <div class="max-w-md mx-auto grid grid-cols-2 gap-2">
-      <button id="nav-scan" onclick="switchTab('scan')" class="py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-        </svg>
-        <span>スキャン登録</span>
-      </button>
-      <button id="nav-search" onclick="switchTab('search')" class="py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <span>本棚を探す</span>
-      </button>
-    </div>
-  </nav>
 
   <!-- =====================================================================
        モーダル1：同一ISBN 重複検知＆2冊目登録アラートモーダル
@@ -543,17 +526,11 @@
     let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
     let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
 
-    // 部屋・本棚マスタ（初期プリセット、GAS連携後はLocationsシートと同期）
-    let locationMaster = [
-      { room: "職員室", shelf: "共通・教務キャビネット" },
-      { room: "職員室", shelf: "窓際スチール棚A" },
-      { room: "理科準備室", shelf: "指導書・資料棚" },
-      { room: "社会科準備室", shelf: "地図・資料集ラック" },
-      { room: "進路指導室", shelf: "赤本・大学案内棚" }
-    ];
+    // 部屋・本棚マスタ（GAS連携後はLocationsシートと同期）
+    let locationMaster = [];
 
-    let currentRoom = "職員室";
-    let currentShelf = "共通・教務キャビネット";
+    let currentRoom = "";
+    let currentShelf = "";
 
     // アプリ全体の蔵書データ＆セッション履歴
     let allBooks = [];
@@ -613,7 +590,18 @@
           }
           if (Array.isArray(data.locations) && data.locations.length > 0) {
             locationMaster = data.locations;
-            // 現在選択中の部屋・本棚がマスタに無ければ先頭に合わせる
+          } else if (allBooks.length > 0) {
+            // Locationsシートが空でも既存蔵書の部屋・本棚から候補を復元
+            const derived = [];
+            allBooks.forEach(b => {
+              if (b.room && b.shelf && !derived.some(d => d.room === b.room && d.shelf === b.shelf)) {
+                derived.push({ room: b.room, shelf: b.shelf });
+              }
+            });
+            locationMaster = derived;
+          }
+
+          if (locationMaster.length > 0) {
             if (!locationMaster.some(l => l.room === currentRoom)) {
               currentRoom = locationMaster[0].room;
               currentShelf = locationMaster[0].shelf;
@@ -658,16 +646,16 @@
       if (tabName === 'scan') {
         viewScan.classList.remove('hidden');
         viewSearch.classList.add('hidden');
-        navScan.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
-        navSearch.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+        navScan.className = 'py-2 px-4 rounded-lg bg-blue-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-blue-600/30 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
       } else {
         if (isScannerRunning) {
           stopScanner();
         }
         viewScan.classList.add('hidden');
         viewSearch.classList.remove('hidden');
-        navSearch.className = 'py-2.5 px-4 rounded-xl bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition';
-        navScan.className = 'py-2.5 px-4 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-teal-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-teal-700/30 transition whitespace-nowrap';
+        navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
         renderSearchFilterChips();
         renderBooksGrid();
       }
@@ -729,43 +717,60 @@
     function renderRoomAndShelfSelectors() {
       const roomContainer = document.getElementById('room-presets');
       const shelfContainer = document.getElementById('shelf-presets');
-      const uniqueRooms = [...new Set(locationMaster.map(l => l.room))];
+      const uniqueRooms = [...new Set(locationMaster.map(l => l.room).filter(Boolean))];
 
-      roomContainer.innerHTML = uniqueRooms.map(room => {
-        const active = room === currentRoom;
-        return `
-          <button onclick='selectRoom(${JSON.stringify(room)})'
-            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-              active
-                ? 'bg-brand-600 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }">
-            🚪 ${escapeHtml(room)}
-          </button>
-        `;
-      }).join('');
+      if (!uniqueRooms.includes(currentRoom)) {
+        currentRoom = uniqueRooms[0] || "";
+      }
 
-      document.getElementById('current-room-label').textContent = currentRoom;
+      if (uniqueRooms.length === 0) {
+        roomContainer.innerHTML = `<span class="text-xs text-slate-400">部屋が未登録です。「＋ 新しい部屋を追加」から追加してください。</span>`;
+      } else {
+        roomContainer.innerHTML = uniqueRooms.map(room => {
+          const active = room === currentRoom;
+          return `
+            <button onclick='selectRoom(${JSON.stringify(room)})'
+              class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                active
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }">
+              🚪 ${escapeHtml(room)}
+            </button>
+          `;
+        }).join('');
+      }
 
-      const shelvesInRoom = locationMaster
-        .filter(l => l.room === currentRoom)
-        .map(l => l.shelf);
+      document.getElementById('current-room-label').textContent = currentRoom || '未選択';
 
-      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
-        const active = shelf === currentShelf;
-        return `
-          <button onclick='selectShelf(${JSON.stringify(shelf)})'
-            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-              active
-                ? 'bg-teal-700 text-white shadow-xs'
-                : 'bg-teal-50 text-teal-900 border border-teal-200/80 hover:bg-teal-100'
-            }">
-            🗄️ ${escapeHtml(shelf)}
-          </button>
-        `;
-      }).join('');
+      const shelvesInRoom = currentRoom
+        ? locationMaster.filter(l => l.room === currentRoom).map(l => l.shelf).filter(Boolean)
+        : [];
 
-      document.getElementById('selected-location-badge').textContent = `${currentRoom} ＞ ${currentShelf}`;
+      if (!shelvesInRoom.includes(currentShelf)) {
+        currentShelf = shelvesInRoom[0] || "";
+      }
+
+      if (shelvesInRoom.length === 0) {
+        shelfContainer.innerHTML = `<span class="text-xs text-slate-400">本棚が未登録です。「＋ この部屋に本棚を追加」から追加してください。</span>`;
+      } else {
+        shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
+          const active = shelf === currentShelf;
+          return `
+            <button onclick='selectShelf(${JSON.stringify(shelf)})'
+              class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                active
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'bg-teal-50 text-teal-900 border border-teal-200/80 hover:bg-teal-100'
+              }">
+              🗄️ ${escapeHtml(shelf)}
+            </button>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('selected-location-badge').textContent =
+        (currentRoom && currentShelf) ? `${currentRoom} ＞ ${currentShelf}` : '未選択';
     }
 
     function selectRoom(room) {
@@ -817,6 +822,11 @@
     async function addNewShelfToCurrentRoom() {
       const shelfInput = document.getElementById('input-new-shelf');
       const newShelf = shelfInput.value.trim();
+
+      if (!currentRoom) {
+        showToast('先に部屋を選択または追加してください', 'warning');
+        return;
+      }
 
       if (!newShelf) {
         showToast('新しい本棚名を入力してください', 'warning');
@@ -1048,6 +1058,12 @@
     function enqueueBookScan(isbn, forceDuplicate = false, overrideRoom = null, overrideShelf = null) {
       const targetRoom = overrideRoom || currentRoom;
       const targetShelf = overrideShelf || currentShelf;
+
+      if (!targetRoom || !targetShelf) {
+        showToast('先に「部屋」と「本棚」を選択または追加してください', 'warning');
+        return;
+      }
+
       const tempId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
 
       playFeedbackSound('queued');
