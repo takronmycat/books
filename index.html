@@ -508,11 +508,16 @@
       </div>
 
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-800 leading-relaxed">
-        <strong>💡 GitHub Pages 公開時の設定：</strong><br>
-        <code>index.html</code> 内の定数 <code>DEFAULT_REGISTER_GAS_URL</code> と <code>DEFAULT_SEARCH_GAS_URL</code> にそれぞれのURLを貼り付けておくと、先生方のスマホで開いた瞬間に自動接続されます。
+        <strong>💡 学校のGoogleアカウント（Workspace）を使う場合の注意：</strong><br>
+        GASのデプロイ設定でアクセスできるユーザーが「組織内限定」になっていると、iPad Safariで <code>Load failed</code> になります。必ず<strong>「全員」</strong>に設定してください（学校制限で選べない場合は個人GmailアカウントでGASをデプロイしてください）。
       </div>
 
-      <div class="flex gap-2 pt-1">
+      <div id="gas-test-result" class="hidden rounded-xl p-3 text-xs font-medium"></div>
+
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button onclick="testGasConnections()" class="py-2.5 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold">
+          接続テスト
+        </button>
         <button onclick="saveGasUrlSettings()" class="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
           保存してデータ再読み込み
         </button>
@@ -531,8 +536,8 @@
      * 【重要】単独GAS 2本のウェブアプリURLをここに貼り付けてGitHubにPushすると、
      * どの端末から開いても最初からスプレッドシートと自動連携します。
      */
-    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/a/macros/mail.ibk.ed.jp/s/AKfycbwatCkGoOfULWxpRizgdiScVi5eXm0laBDweflis6bTxXkCjN_swEc82cBIv3QGefnaWA/exec"; // RegisterApi.gs のデプロイURL
-    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/a/macros/mail.ibk.ed.jp/s/AKfycbzq_AMQEdckBCQzgDKbnS_CxvBeFa6TIBC6E-JpDdjTZQDfs8QtnBKxuE4MjhENV0n91w/exec"; // SearchApi.gs のデプロイURL
+    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec"; // RegisterApi.gs のデプロイURL
+    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec"; // SearchApi.gs のデプロイURL
 
     // URLパラメータ (?reg=...&search=...) からの上書きにも対応
     const urlParams = new URLSearchParams(window.location.search);
@@ -1146,7 +1151,12 @@
       } catch (err) {
         console.error('Register error:', err);
         playFeedbackSound('error');
-        showToast(`登録エラー: ${err.message}`, 'error');
+        const isCorsOrAuthError = /load failed|failed to fetch|networkerror/i.test(err.message || '');
+        if (isCorsOrAuthError) {
+          showToast('通信ブロック(Load failed)：GASのアクセス権限を「全員」にするか、個人GmailでGASをデプロイしてください', 'error');
+        } else {
+          showToast(`登録エラー: ${err.message}`, 'error');
+        }
       } finally {
         isProcessingScan = false;
         badge.classList.add('hidden');
@@ -1369,7 +1379,15 @@
         }
       } catch (err) {
         console.error('Fetch books error:', err);
-        if (showNotify) showToast('データの読み込みに失敗しました。GASの公開設定を確認してください', 'error');
+        if (showNotify) {
+          const isCorsOrAuthError = /load failed|failed to fetch|networkerror/i.test(err.message || '');
+          showToast(
+            isCorsOrAuthError
+              ? '通信ブロック：GASの公開設定が「組織内限定」の可能性があります。「全員」に変更してください'
+              : 'データの読み込みに失敗しました。GASの公開設定を確認してください',
+            'error'
+          );
+        }
       } finally {
         if (refreshIcon) refreshIcon.classList.remove('animate-spin');
         renderSearchFilterChips();
@@ -1691,12 +1709,33 @@
     }
 
     /**
-     * ユーティリティ
+     * 登録用GAS・検索用GASの疎通テスト
      */
-    function getSafeCoverUrl(coverUrl, isbn) {
-      if (coverUrl && coverUrl.startsWith('http')) {
-        return coverUrl.replace(/^http:\/\//i, 'https://');
+    async function testGasConnections() {
+      const regUrl = document.getElementById('register-gas-url-input').value.trim();
+      const schUrl = document.getElementById('search-gas-url-input').value.trim();
+      const box = document.getElementById('gas-test-result');
+      box.className = 'rounded-xl p-3 text-xs font-medium bg-slate-100 text-slate-700';
+      box.textContent = '接続テスト中...';
+      box.classList.remove('hidden');
+
+      const results = [];
+      for (const [label, url] of [['①登録GAS', regUrl], ['②検索GAS', schUrl]]) {
+        if (!url) {
+          results.push(`${label}: 未入力`);
+          continue;
+        }
+        try {
+          const res = await fetch(url);
+          const json = await res.json();
+          results.push(json.status === 'success' ? `${label}: ✅ 正常接続OK` : `${label}: ⚠️ 応答あり(${json.message})`);
+        } catch (e) {
+          results.push(`${label}: ❌ ブロック(Load failed) → GASのアクセス権を「全員」にしてください`);
+        }
       }
+      box.className = 'rounded-xl p-3 text-xs font-bold bg-slate-800 text-white space-y-1';
+      box.innerHTML = results.map(r => `<div>${escapeHtml(r)}</div>`).join('');
+    }
       if (isbn) {
         return `https://cover.openbd.jp/${isbn}.jpg`;
       }
