@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- html5-qrcode: スマホ・iPadカメラでのバーコード（EAN-13 / ISBN）読み取り -->
+  <!-- html5-qrcode: スマホ・iPad・PCカメラでのバーコード（EAN-13 / ISBN）読み取り -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- Tone.js: 電子ビープ音・重複警告音生成 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
@@ -25,32 +25,49 @@
             brand: {
               50: '#eef2ff',
               100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
               500: '#6366f1',
               600: '#4f46e5',
               700: '#4338ca',
+              800: '#3730a3',
               900: '#312e81',
             }
           }
         }
       }
-    }
+    };
   </script>
   <style>
-    /* iPad Safari でカメラ映像が枠いっぱいに鮮明表示されるよう調整 */
+    /* カメラ映像とバーコード読み取り枠（qrbox）を鮮明に表示 */
+    #reader {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
     #reader video {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
     }
     #reader__scan_region {
+      width: 100% !important;
+      height: 100% !important;
       min-height: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    #reader__dashboard {
+      display: none !important;
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-10">
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-12">
 
   <!-- =====================================================================
-       ヘッダー：タイトル・画面切替タブ
+       ヘッダー：タイトル・GAS接続状態・画面切替タブ・API設定ボタン
   ====================================================================== -->
   <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-2.5">
     <div class="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
@@ -63,25 +80,41 @@
         <div>
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900">Hondana Scan</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">教員蔵書</span>
+          </div>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span id="connection-label" class="text-[11px] font-medium text-slate-500">読み込み中...</span>
           </div>
         </div>
       </div>
 
-      <!-- ヘッダー内タブ切り替えボタン -->
-      <nav aria-label="画面切り替え" class="grid grid-cols-2 gap-1.5 bg-slate-200/80 p-1 rounded-xl w-full sm:w-auto border border-slate-300">
-        <button id="nav-scan" onclick="switchTab('scan')" class="py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-400 transition whitespace-nowrap">
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+        <!-- ヘッダー内タブ切り替えボタン（とうろく＝青 / 本をさがす＝赤） -->
+        <nav aria-label="画面切り替え" class="grid grid-cols-2 gap-1.5 bg-slate-200/80 p-1 rounded-xl flex-1 sm:flex-initial border border-slate-300">
+          <button id="nav-scan" onclick="switchTab('scan')" class="py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-300 transition whitespace-nowrap">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+            </svg>
+            <span>とうろく</span>
+          </button>
+          <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <span>本をさがす</span>
+          </button>
+        </nav>
+
+        <!-- GAS API設定ボタン -->
+        <button onclick="openSettingsModal()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 border border-slate-200 transition shrink-0 flex items-center gap-1.5 text-xs font-bold" title="単独GAS API設定">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
           </svg>
-          <span>とうろく</span>
+          <span class="hidden sm:inline">API設定</span>
         </button>
-        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-          </svg>
-          <span>本をさがす</span>
-        </button>
-      </nav>
+      </div>
     </div>
   </header>
 
@@ -106,7 +139,7 @@
             登録先の「部屋」と「本棚」を選択
           </span>
           <span id="selected-location-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200">
-            未選択
+            読み込み中...
           </span>
         </div>
 
@@ -118,7 +151,9 @@
               <span>＋ 新しい部屋を追加</span>
             </button>
           </div>
-          <div id="room-presets" class="flex flex-wrap gap-2"></div>
+          <div id="room-presets" class="flex flex-wrap gap-2">
+            <span class="text-xs text-slate-400">読み込み中...</span>
+          </div>
 
           <!-- 新しい部屋追加フォーム（折りたたみ） -->
           <div id="new-room-form" class="hidden bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
@@ -131,7 +166,7 @@
             </div>
             <div class="flex justify-end gap-2">
               <button onclick="toggleNewRoomForm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">閉じる</button>
-              <button onclick="addNewRoomAndShelf()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-bold">部屋と本棚を追加</button>
+              <button onclick="addNewRoomAndShelf()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">部屋と本棚を追加</button>
             </div>
           </div>
         </div>
@@ -140,13 +175,15 @@
         <div class="pt-3 border-t border-slate-100 space-y-2">
           <div class="flex items-center justify-between">
             <label class="text-xs font-bold text-slate-600">
-              ② 「<span id="current-room-label" class="text-brand-700">未選択</span>」の中の本棚を選ぶ
+              ② 「<span id="current-room-label" class="text-brand-700">読み込み中...</span>」の中の本棚を選ぶ
             </label>
             <button onclick="toggleNewShelfForm()" class="text-[11px] font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1">
               <span>＋ この部屋に本棚を追加</span>
             </button>
           </div>
-          <div id="shelf-presets" class="flex flex-wrap gap-2"></div>
+          <div id="shelf-presets" class="flex flex-wrap gap-2">
+            <span class="text-xs text-slate-400">読み込み中...</span>
+          </div>
 
           <!-- 現在の部屋に新しい本棚を追加するフォーム（折りたたみ） -->
           <div id="new-shelf-form" class="hidden bg-teal-50/70 p-3 rounded-xl border border-teal-200 flex gap-2">
@@ -181,16 +218,16 @@
               </svg>
             </div>
             <p class="text-sm font-semibold mb-1">カメラは停止中です</p>
-            <p class="text-xs text-slate-400 max-w-sm">iPadやスマホは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。PCのWebカメラでも利用でき、送信中でも次の本を連続でかざせます。</p>
+            <p class="text-xs text-slate-400 max-w-sm">iPadやスマホでは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。PCのWebカメラでも利用でき、送信中でも次の本を連続でかざせます。</p>
           </div>
 
           <!-- リアルタイム読取ガイド（下段192バーコード検知時など） -->
-          <div id="scan-live-hint" class="hidden absolute bottom-3 left-3 right-3 bg-amber-500/95 text-slate-950 px-3 py-1.5 rounded-xl shadow-md text-center text-xs font-bold backdrop-blur-xs">
+          <div id="scan-live-hint" class="hidden absolute bottom-3 left-3 right-3 bg-amber-500/95 text-slate-950 px-3 py-1.5 rounded-xl shadow-md text-center text-xs font-bold backdrop-blur-xs z-10">
             下の段（価格コード）を検出中 → 少し上の段（978...）を枠に入れてください
           </div>
 
           <!-- スキャン通信中オーバーレイ（次の読取も継続可能） -->
-          <div id="scan-processing-badge" class="hidden absolute top-3 left-3 right-3 bg-brand-600/95 text-white px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 text-xs font-semibold backdrop-blur-sm">
+          <div id="scan-processing-badge" class="hidden absolute top-3 left-3 right-3 bg-brand-600/95 text-white px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2.5 text-xs font-semibold backdrop-blur-sm z-10">
             <svg class="animate-spin h-4 w-4 text-white shrink-0" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -208,13 +245,6 @@
 
         <!-- カメラ操作ボタン ＆ 写真スキャン保険ボタン -->
         <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          <button id="btn-permission-camera" onclick="requestCameraPermission()" class="sm:col-span-3 py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-[0.99] text-amber-900 border border-amber-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition">
-            <svg class="w-4 h-4 text-amber-700 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span id="camera-permission-label">カメラの使用を許可する（初回・権限確認）</span>
-          </button>
-
           <button id="btn-start-camera" onclick="startScanner()" class="sm:col-span-2 py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -248,7 +278,8 @@
           <div class="mt-2.5 space-y-2">
             <div class="flex gap-2">
               <input type="text" id="manual-isbn-input" inputmode="numeric" placeholder="9784XXXXXXXXX（13桁）"
-                class="flex-1 text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-slate-50">
+                class="flex-1 text-sm rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-slate-50"
+                onkeydown="if(event.key==='Enter') handleManualIsbnSubmit()">
               <button onclick="handleManualIsbnSubmit()" class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold whitespace-nowrap">
                 登録
               </button>
@@ -297,7 +328,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
             <input type="text" id="search-query-input" oninput="renderBooksGrid()" placeholder="タイトル・著者・ISBN・メモで検索..."
-              class="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+              class="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500">
           </div>
           <button onclick="fetchAllBooks(true)" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition" title="最新情報を再読み込み">
             <svg id="refresh-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -318,13 +349,13 @@
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-shelf-chips"></div>
         </div>
 
-        <!-- 件数表示と並び替え -->
+        <!-- 件数表示と並び替え・全チェック -->
         <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs flex-wrap gap-2">
           <div class="flex items-center gap-2">
             <span class="font-semibold text-slate-600">
               該当: <span id="filtered-books-count" class="text-rose-600 font-bold text-sm">0</span> 冊
             </span>
-            <button onclick="selectAllFilteredBooks()" class="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition">
+            <button onclick="selectAllFilteredBooks()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-200 transition">
               表示中を全チェック
             </button>
           </div>
@@ -349,23 +380,23 @@
     </section>
 
     <!-- 一括更新バー表示時の下部余白スペーサー -->
-    <div id="bulk-bar-spacer" class="hidden h-32"></div>
+    <div id="bulk-bar-spacer" class="hidden h-36"></div>
 
   </main>
 
   <!-- =====================================================================
        フローティングバー：チェックした本の一括場所更新（部屋・本棚）
   ====================================================================== -->
-  <div id="bulk-update-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-brand-500 shadow-2xl px-4 py-3">
+  <div id="bulk-update-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-brand-600 shadow-2xl px-4 py-3">
     <div class="max-w-3xl mx-auto space-y-2.5">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-          <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-brand-600 text-white text-xs font-bold">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-brand-700 text-white text-xs font-bold shadow-xs">
             ✓ <span id="bulk-selected-count" class="mx-0.5">0</span>冊 チェック中
           </span>
           <span class="text-[11px] text-slate-500 hidden sm:inline">再スキャン不要で保管場所を一括変更できます</span>
         </div>
-        <button onclick="clearBookSelection()" class="text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition">
+        <button onclick="clearBookSelection()" class="text-xs font-bold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition">
           チェック解除
         </button>
       </div>
@@ -381,7 +412,7 @@
         </div>
         <div class="sm:col-span-4">
           <button id="btn-execute-bulk-update" onclick="executeBulkLocationUpdate()"
-            class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs shadow-sm transition">
+            class="w-full py-2.5 px-4 rounded-xl bg-brand-700 hover:bg-brand-800 active:scale-[0.99] text-white font-bold text-xs shadow-sm transition">
             チェックした本を一括更新
           </button>
         </div>
@@ -390,124 +421,130 @@
   </div>
 
   <!-- =====================================================================
-       モーダル1：重複スキャン検知＆2冊目確認アラートモーダル
+       モーダル1：同一ISBN 重複検知＆2冊目登録アラートモーダル
   ====================================================================== -->
-  <div id="duplicate-alert-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl border-2 border-amber-400 space-y-4 max-h-[90vh] overflow-y-auto">
+  <div id="duplicate-alert-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 border-t-4 border-amber-500">
       <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold text-lg">
-          ⚠️
+        <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
         </div>
-        <div class="min-w-0 flex-1">
-          <span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold mb-1">
-            すでに <span id="dup-existing-count">1</span>冊 登録済みです
+        <div>
+          <span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-bold mb-1">
+            重複スキャン検知（すでに <span id="dup-existing-count">1</span> 冊登録済み）
           </span>
-          <h3 id="dup-book-title" class="font-bold text-sm text-slate-900 leading-snug">書籍タイトル</h3>
-          <p id="dup-book-isbn" class="text-[11px] font-mono text-slate-500 mt-0.5">ISBN: 978...</p>
+          <h3 id="dup-book-title" class="font-bold text-base text-slate-900 leading-snug">書籍タイトル</h3>
+          <p id="dup-book-isbn" class="text-xs font-mono text-slate-500 mt-0.5">ISBN: 978...</p>
         </div>
       </div>
 
-      <div class="bg-amber-50/90 border border-amber-200 rounded-2xl p-3 space-y-2">
-        <p class="text-xs font-bold text-amber-900">現在の登録場所：</p>
-        <div id="dup-existing-list" class="space-y-1.5"></div>
+      <!-- すでに登録されている本の場所一覧 -->
+      <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-2">
+        <p class="text-xs font-bold text-amber-900">現在登録されている保管場所：</p>
+        <div id="dup-existing-list" class="space-y-2"></div>
       </div>
 
       <p class="text-xs text-slate-600 leading-relaxed">
-        同じ本を<strong><span id="dup-next-copy-num">2</span>冊目（複本）</strong>として追加登録するか、既存の1冊目を現在の選択先へ移動するか選んでください。
+        同じ本を複数冊持っている場合（複本）は<strong>「<span id="dup-next-copy-num">2</span>冊目として追加登録」</strong>を押してください。二重スキャンしてしまった場合はキャンセルできます。
       </p>
 
+      <!-- 3つのアクションボタン -->
       <div class="space-y-2 pt-1">
-        <button onclick="confirmRegisterDuplicate()" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-slate-950 font-bold text-xs shadow-sm transition">
-          ＋ <span id="dup-btn-copy-label">2冊目（複本）</span>として【<span id="dup-target-loc"></span>】に追加登録
+        <button onclick="confirmRegisterDuplicate()" class="w-full py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs sm:text-sm shadow-sm transition">
+          📚 <span id="dup-btn-copy-label">2冊目（複本）</span>として「<span id="dup-target-loc"></span>」に追加登録する
         </button>
-        <button onclick="moveFirstExistingToCurrentLocation()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs transition">
-          📦 既存の1冊目を【<span id="dup-move-target-loc"></span>】へ場所移動する
+
+        <button id="btn-move-existing-instead" onclick="moveFirstExistingToCurrentLocation()" class="w-full py-3 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 font-bold text-xs transition">
+          📦 登録済みの1冊目を「<span id="dup-move-target-loc"></span>」へ場所移動する
         </button>
+
         <button onclick="closeDuplicateModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
-          キャンセル（登録しない）
+          登録せずキャンセル（二重読み取り）
         </button>
       </div>
     </div>
   </div>
 
   <!-- =====================================================================
-       モーダル2：書籍詳細・編集・場所移動・削除モーダル
+       モーダル2：書籍詳細＆タイトル・著者・場所移動・メモ編集・削除モーダル
   ====================================================================== -->
-  <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-start gap-3">
-        <div class="flex gap-3 min-w-0">
-          <img id="modal-book-cover" src="" alt="表紙" class="w-16 h-24 object-cover rounded-xl bg-slate-100 border border-slate-200 shrink-0">
-          <div class="min-w-0 space-y-1">
-            <div class="flex flex-wrap items-center gap-1">
-              <span id="modal-book-location" class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[11px] font-bold"></span>
-              <span id="modal-book-copy-badge" class="hidden inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold"></span>
+  <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+      <div class="flex justify-between items-start gap-4">
+        <div class="flex gap-4">
+          <img id="modal-book-cover" src="" alt="表紙" class="w-24 h-34 object-cover rounded-xl bg-slate-100 border border-slate-200 shrink-0 shadow-xs">
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span id="modal-book-location" class="inline-block px-2.5 py-1 rounded-lg bg-brand-100 text-brand-800 text-xs font-bold">
+                部屋 ＞ 本棚
+              </span>
+              <span id="modal-book-copy-badge" class="hidden inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[11px] font-bold">
+                2冊目
+              </span>
             </div>
-            <h3 id="modal-book-title" class="font-bold text-sm text-slate-900 leading-snug line-clamp-2"></h3>
-            <p id="modal-book-author" class="text-xs text-slate-600 truncate"></p>
-            <p id="modal-book-publisher" class="text-[11px] text-slate-400 truncate"></p>
+            <h3 id="modal-book-title" class="font-bold text-base text-slate-900 leading-snug">タイトル</h3>
+            <p id="modal-book-author" class="text-xs text-slate-600">著者名</p>
+            <p id="modal-book-publisher" class="text-[11px] text-slate-400">出版社</p>
           </div>
         </div>
-        <button onclick="closeBookDetailModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 shrink-0">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button onclick="closeBookDetailModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
 
-      <div class="flex items-center justify-between text-[11px] text-slate-400 bg-slate-50 px-3 py-2 rounded-xl font-mono">
-        <span>ISBN: <span id="modal-book-isbn" class="text-slate-700 font-bold"></span></span>
-        <span id="modal-book-timestamp"></span>
+      <div class="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1 border border-slate-200/70">
+        <div class="flex justify-between"><span class="text-slate-400">ISBN:</span><span id="modal-book-isbn" class="font-mono font-medium"></span></div>
+        <div class="flex justify-between"><span class="text-slate-400">登録日時:</span><span id="modal-book-timestamp"></span></div>
       </div>
 
-      <div class="space-y-3 border-t border-slate-100 pt-3">
-        <div class="space-y-1">
-          <label class="block text-xs font-bold text-slate-700">タイトル（未登録時の手入力・修正）</label>
-          <input type="text" id="modal-new-title" placeholder="書籍タイトルを入力"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <!-- タイトル・著者・保管場所（部屋・本棚）の編集＆備考メモフォーム -->
+      <div class="pt-2 border-t border-slate-100 space-y-3">
+        <label class="block text-xs font-bold text-slate-700">タイトル・著者・保管場所・備考メモを編集</label>
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">書名（タイトル）</span>
+          <input type="text" id="modal-new-title" placeholder="書名を入力（未登録本の入力・修正も可能）"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
         </div>
-
-        <div class="space-y-1">
-          <label class="block text-xs font-bold text-slate-700">著者名</label>
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">著者名</span>
           <input type="text" id="modal-new-author" placeholder="著者名を入力"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
         </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div class="space-y-1">
-            <label class="block text-xs font-bold text-slate-700">保管先の部屋</label>
-            <select id="modal-new-room" onchange="handleModalRoomChange()"
-              class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold">部屋名</span>
+            <input type="text" id="modal-new-room" list="modal-room-datalist" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <datalist id="modal-room-datalist"></datalist>
           </div>
-          <div class="space-y-1">
-            <label class="block text-xs font-bold text-slate-700">保管先の本棚</label>
-            <select id="modal-new-shelf"
-              class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold">本棚名</span>
+            <input type="text" id="modal-new-shelf" list="modal-shelf-datalist" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <datalist id="modal-shelf-datalist"></datalist>
           </div>
         </div>
-
-        <div class="space-y-1">
-          <label class="block text-xs font-bold text-slate-700">備考・メモ（貸出状況・教科など）</label>
-          <input type="text" id="modal-new-note" placeholder="メモを入力（任意）"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <div>
+          <span class="text-[10px] text-slate-400 font-bold">備考メモ（担当者名・教科・貸出メモなど）</span>
+          <input type="text" id="modal-new-note" placeholder="例：〇〇先生私物、赤本2026年度版など"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
         </div>
-      </div>
-
-      <div class="flex flex-col gap-2 pt-1">
-        <button onclick="updateBookDetails()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs shadow-sm transition">
+        <button onclick="updateBookDetails()" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
           変更を保存する
         </button>
+      </div>
 
-        <button id="btn-delete-step1" onclick="showDeleteConfirm()" class="w-full py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition">
-          この蔵書を削除する
+      <!-- 削除確認エリア -->
+      <div class="pt-2 flex justify-between items-center border-t border-slate-100">
+        <button id="btn-delete-step1" onclick="showDeleteConfirm()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 py-2 px-3 rounded-lg hover:bg-rose-50">
+          この本をリストから削除
         </button>
-
-        <div id="delete-confirm-box" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-2">
-          <p class="text-xs font-bold text-rose-800 text-center">本当にこの本を蔵書データから削除しますか？</p>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="hideDeleteConfirm()" class="py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-bold">やめる</button>
-            <button onclick="executeDeleteBook()" class="py-2 rounded-lg bg-rose-600 text-white text-xs font-bold">削除を実行</button>
-          </div>
+        <div id="delete-confirm-box" class="hidden flex items-center gap-2">
+          <span class="text-xs text-rose-600 font-bold">本当に削除しますか？</span>
+          <button onclick="executeDeleteBook()" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold">削除実行</button>
+          <button onclick="hideDeleteConfirm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">取消</button>
         </div>
       </div>
     </div>
@@ -520,7 +557,7 @@
     <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center">
         <h3 class="font-bold text-base text-slate-900">単独GAS API 連携設定</h3>
-        <button onclick="closeSettingsModal()" class="p-2 rounded-full bg-slate-100 text-slate-500">
+        <button onclick="closeSettingsModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
@@ -536,7 +573,7 @@
           <label class="block text-xs font-bold text-slate-700">① 登録・更新用 GAS URL（RegisterApi.gs）</label>
           <input type="url" id="register-gas-url-input" placeholder="https://script.google.com/macros/s/XXXX/exec"
             class="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
-          <p class="text-[11px] text-slate-400">バーコード登録・場所移動・棚追加に使用します。</p>
+          <p class="text-[11px] text-slate-400">バーコード登録・場所移動・一括更新・棚追加に使用します。</p>
         </div>
 
         <div class="space-y-1">
@@ -561,7 +598,7 @@
         <button onclick="saveGasUrlSettings()" class="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
           保存してデータ再読み込み
         </button>
-        <button onclick="closeSettingsModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+        <button onclick="closeSettingsModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">
           閉じる
         </button>
       </div>
@@ -569,43 +606,179 @@
   </div>
 
   <!-- =====================================================================
-       アプリケーション制御スクリプト
+       アプリケーション制御スクリプト（単独GAS 2本連携）
   ====================================================================== -->
   <script>
+    /**
+     * 【重要】単独GAS 2本のウェブアプリURL（元の設定を維持）
+     */
     const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec";
     const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec";
 
+    // URLパラメータ (?reg=...&search=...) からの上書きにも対応
     const urlParams = new URLSearchParams(window.location.search);
-    let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
-    let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
+    let registerGasUrl = (urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL).trim();
+    let searchGasUrl   = (urlParams.get('search') || DEFAULT_SEARCH_GAS_URL).trim();
 
+    // 部屋・本棚マスタ（仮の初期データは入れず、GAS読み込み完了後に反映）
     let locationMaster = [];
-
     let currentRoom = "";
     let currentShelf = "";
     let isLocationsLoading = true;
 
+    // アプリ全体の蔵書データ＆今回セッション履歴
     let allBooks = [];
     let sessionScannedBooks = [];
 
+    // 探索画面のフィルタ・一括選択・モーダル状態
     let activeRoomFilter = 'ALL';
     let activeShelfFilter = 'ALL';
     let isGridView = true;
     let selectedBookForModal = null;
     let selectedBookIds = new Set();
     let isBulkUpdating = false;
+
+    // カメラスキャナー・連続読取キュー状態
     let html5QrCode = null;
     let isScannerRunning = false;
+    let isScannerStarting = false;
     let scanQueue = [];
     let isQueueWorkerRunning = false;
     let lastScannedIsbn = "";
     let lastScannedTime = 0;
     const SCAN_COOLDOWN_MS = 2800;
     let liveHintTimer = null;
+
+    // 重複スキャン確認モーダル用の一時保持データ
     let pendingDuplicateData = null;
 
     /**
-     * 画面タブ（とうろく / 本をさがす）を切り替える
+     * =====================================================================
+     * 初期化処理
+     * =====================================================================
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      updateConnectionBadge();
+      renderRoomAndShelfSelectors();
+      renderSearchFilterChips();
+      fetchAllBooks(false);
+    });
+
+    function updateConnectionBadge() {
+      const dot = document.getElementById('connection-dot');
+      const label = document.getElementById('connection-label');
+      const hasReg = registerGasUrl && registerGasUrl.startsWith('http');
+      const hasSch = searchGasUrl && searchGasUrl.startsWith('http');
+
+      if (hasReg && hasSch) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        label.textContent = '登録GAS・検索GAS 両方連携中';
+      } else if (hasReg || hasSch) {
+        dot.className = 'w-2 h-2 rounded-full bg-sky-500';
+        label.textContent = 'GAS連携中（片側URL使用）';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+        label.textContent = 'GAS未接続（API設定を確認）';
+      }
+    }
+
+    /**
+     * スプレッドシート（GAS）から全蔵書データと部屋・本棚マスタを取得
+     */
+    async function fetchAllBooks(showNotice = false) {
+      const targetUrl = (searchGasUrl && searchGasUrl.startsWith('http'))
+        ? searchGasUrl
+        : (registerGasUrl && registerGasUrl.startsWith('http') ? registerGasUrl : '');
+
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+      isLocationsLoading = true;
+      renderRoomAndShelfSelectors();
+
+      try {
+        if (targetUrl) {
+          const res = await fetch(targetUrl);
+          const data = await res.json();
+          if (data.status !== 'success') {
+            throw new Error(data.message || 'データ取得エラー');
+          }
+
+          allBooks = Array.isArray(data.books) ? data.books : [];
+
+          // Locationsシートと蔵書内の場所を重複なく統合
+          const mergedLocs = [];
+          const locSet = new Set();
+          const pushLoc = (r, s) => {
+            const room = String(r || '').trim();
+            const shelf = String(s || '').trim();
+            if (!room || !shelf) return;
+            const key = `${room}\u0000${shelf}`;
+            if (!locSet.has(key)) {
+              locSet.add(key);
+              mergedLocs.push({ room, shelf });
+            }
+          };
+
+          if (Array.isArray(data.locations)) {
+            data.locations.forEach(l => pushLoc(l.room, l.shelf));
+          }
+          allBooks.forEach(b => pushLoc(b.room, b.shelf));
+          locationMaster = mergedLocs;
+
+          if (locationMaster.length > 0) {
+            if (!locationMaster.some(l => l.room === currentRoom)) {
+              currentRoom = locationMaster[0].room;
+              currentShelf = locationMaster[0].shelf;
+            } else if (!locationMaster.some(l => l.room === currentRoom && l.shelf === currentShelf)) {
+              const firstInRoom = locationMaster.find(l => l.room === currentRoom);
+              currentShelf = firstInRoom ? firstInRoom.shelf : locationMaster[0].shelf;
+            }
+          } else {
+            currentRoom = "";
+            currentShelf = "";
+          }
+
+          // 存在しなくなったチェック選択を掃除
+          const validIds = new Set(allBooks.map(b => b.id));
+          selectedBookIds.forEach(id => {
+            if (!validIds.has(id)) selectedBookIds.delete(id);
+          });
+
+          isLocationsLoading = false;
+          renderRoomAndShelfSelectors();
+          renderSearchFilterChips();
+          renderBooksGrid();
+          updateBulkUpdateBar();
+
+          if (showNotice) {
+            showToast(`最新データを読み込みました（全${allBooks.length}冊）`, 'success');
+          }
+        } else {
+          isLocationsLoading = false;
+          renderRoomAndShelfSelectors();
+          renderSearchFilterChips();
+          renderBooksGrid();
+          if (showNotice) {
+            showToast('API設定からGAS URLを入力してください', 'warning');
+          }
+        }
+      } catch (err) {
+        console.error('Fetch books error:', err);
+        isLocationsLoading = false;
+        renderRoomAndShelfSelectors();
+        renderSearchFilterChips();
+        renderBooksGrid();
+        showToast(`データ読み込みに失敗しました: ${err.message}`, 'error');
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    /**
+     * =====================================================================
+     * 画面タブ切り替え ＆ 通知・効果音
+     * =====================================================================
      */
     function switchTab(tabName) {
       const viewScan = document.getElementById('view-scan');
@@ -616,7 +789,7 @@
       if (tabName === 'scan') {
         viewScan.classList.remove('hidden');
         viewSearch.classList.add('hidden');
-        navScan.className = 'py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-400 transition whitespace-nowrap';
+        navScan.className = 'py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-300 transition whitespace-nowrap';
         navSearch.className = 'py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
       } else {
         if (isScannerRunning) {
@@ -624,142 +797,12 @@
         }
         viewScan.classList.add('hidden');
         viewSearch.classList.remove('hidden');
-        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-rose-400 transition whitespace-nowrap';
-        navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-rose-300 transition whitespace-nowrap';
+        navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
         renderSearchFilterChips();
         renderBooksGrid();
       }
     }
-
-    /**
-     * 明示的にカメラ使用許可をブラウザへ要求する
-     */
-    async function requestCameraPermission() {
-      const label = document.getElementById('camera-permission-label');
-      const btn = document.getElementById('btn-permission-camera');
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showToast('このブラウザではカメラAPI（getUserMedia）を利用できません。「写真から読取」をお使いください', 'error');
-        return;
-      }
-
-      try {
-        if (label) label.textContent = 'カメラの許可を確認中...';
-        let stream = null;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } },
-            audio: false
-          });
-        } catch (firstErr) {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-          });
-        }
-        // 許可確認のみが目的なので取得したストリームはすぐ停止して解放する
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-
-        if (label) label.textContent = 'カメラの使用は許可されています（再確認可能）';
-        if (btn) {
-          btn.className = 'sm:col-span-3 py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.99] text-emerald-900 border border-emerald-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition';
-        }
-        showToast('カメラの使用が許可されました。「カメラを起動して連続スキャン」を押してください', 'success');
-      } catch (err) {
-        console.error('Camera permission error:', err);
-        if (label) label.textContent = 'カメラの使用を許可する（初回・権限確認）';
-        if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-          showToast('カメラの使用が拒否されました。ブラウザの設定からカメラを許可してください', 'error');
-        } else {
-          showToast('カメラの許可確認に失敗しました。接続や権限をご確認ください', 'error');
-        }
-      }
-    }
-
-    /**
-     * =====================================================================
-     * 初期化処理
-     * =====================================================================
-     */
-    window.addEventListener('DOMContentLoaded', () => {
-      renderRoomAndShelfSelectors();
-      renderSearchFilterChips();
-      fetchAllBooks(false);
-    });
-
-    /**
-     * スプレッドシートから全蔵書データと部屋・本棚マスタを取得
-     */
-    async function fetchAllBooks(showNotice = false) {
-      const targetUrl = (searchGasUrl && searchGasUrl.startsWith('http'))
-        ? searchGasUrl
-        : (registerGasUrl && registerGasUrl.startsWith('http') ? registerGasUrl : '');
-
-      const refreshIcon = document.getElementById('refresh-icon');
-      if (refreshIcon) refreshIcon.classList.add('animate-spin');
-
-      try {
-        if (targetUrl) {
-          const res = await fetch(targetUrl);
-          const data = await res.json();
-          if (data.status !== 'success') {
-            throw new Error(data.message || 'データ取得エラー');
-          }
-
-          if (Array.isArray(data.books)) {
-            allBooks = data.books;
-          }
-          if (Array.isArray(data.locations) && data.locations.length > 0) {
-            locationMaster = data.locations;
-          } else if (allBooks.length > 0) {
-            // Locationsシートが空でも既存蔵書の部屋・本棚から候補を復元
-            const derived = [];
-            allBooks.forEach(b => {
-              if (b.room && b.shelf && !derived.some(d => d.room === b.room && d.shelf === b.shelf)) {
-                derived.push({ room: b.room, shelf: b.shelf });
-              }
-            });
-            locationMaster = derived;
-          }
-
-          if (locationMaster.length > 0) {
-            if (!locationMaster.some(l => l.room === currentRoom)) {
-              currentRoom = locationMaster[0].room;
-              currentShelf = locationMaster[0].shelf;
-            } else if (!locationMaster.some(l => l.room === currentRoom && l.shelf === currentShelf)) {
-              const firstInRoom = locationMaster.find(l => l.room === currentRoom);
-              if (firstInRoom) currentShelf = firstInRoom.shelf;
-            }
-          }
-
-          renderRoomAndShelfSelectors();
-          renderSearchFilterChips();
-          renderBooksGrid();
-          if (showNotice) {
-            showToast(`最新データを読み込みました（全${allBooks.length}冊）`, 'success');
-          }
-        } else {
-          allBooks = [];
-          renderSearchFilterChips();
-          renderBooksGrid();
-        }
-      } catch (err) {
-        console.error('Fetch books error:', err);
-        if (showNotice) {
-          showToast(`データ読み込みに失敗しました: ${err.message}`, 'error');
-        }
-      } finally {
-        if (isLocationsLoading) {
-          isLocationsLoading = false;
-          renderRoomAndShelfSelectors();
-        }
-        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
-      }
-    }
-
-    // showToast や部屋・本棚セレクター制御はそのまま維持
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
@@ -789,6 +832,7 @@
           else if (mode === 'duplicate') navigator.vibrate([120, 60, 120]);
           else navigator.vibrate([200]);
         }
+        if (typeof Tone === 'undefined') return;
         await Tone.start();
         const synth = new Tone.Synth({
           oscillator: { type: 'sine' },
@@ -811,70 +855,80 @@
 
     /**
      * =====================================================================
-     * 部屋＆本棚の2階層セレクター・新規追加
+     * 部屋＆本棚の2階層セレクター・新規追加（強い選択ハイライト）
      * =====================================================================
      */
     function renderRoomAndShelfSelectors() {
       const roomContainer = document.getElementById('room-presets');
       const shelfContainer = document.getElementById('shelf-presets');
-      const uniqueRooms = [...new Set(locationMaster.map(l => l.room).filter(Boolean))];
+      const roomLabel = document.getElementById('current-room-label');
+      const locBadge = document.getElementById('selected-location-badge');
 
-      if (!uniqueRooms.includes(currentRoom)) {
-        currentRoom = uniqueRooms[0] || "";
+      if (isLocationsLoading) {
+        roomContainer.innerHTML = `<span class="text-xs text-slate-400">読み込み中...</span>`;
+        shelfContainer.innerHTML = `<span class="text-xs text-slate-400">読み込み中...</span>`;
+        roomLabel.textContent = '読み込み中...';
+        locBadge.textContent = '読み込み中...';
+        return;
       }
+
+      const uniqueRooms = [...new Set(locationMaster.map(l => l.room))];
 
       if (uniqueRooms.length === 0) {
-        roomContainer.innerHTML = isLocationsLoading
-          ? `<span class="text-xs text-slate-400">読み込み中...</span>`
-          : `<span class="text-xs text-slate-400">部屋が未登録です。「＋ 新しい部屋を追加」から追加してください。</span>`;
-      } else {
-        roomContainer.innerHTML = uniqueRooms.map(room => {
-          const active = room === currentRoom;
-          return `
-            <button onclick='selectRoom(${JSON.stringify(room)})'
-              class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-                active
-                  ? 'bg-brand-700 text-white shadow-md ring-2 ring-brand-400 scale-[1.02]'
-                  : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
-              }">
-              🚪 ${escapeHtml(room)}
-            </button>
-          `;
-        }).join('');
+        roomContainer.innerHTML = `<span class="text-xs text-slate-400">まだ部屋が登録されていません。「＋ 新しい部屋を追加」から登録してください。</span>`;
+        shelfContainer.innerHTML = `<span class="text-xs text-slate-400">先に部屋を追加してください。</span>`;
+        roomLabel.textContent = '未登録';
+        locBadge.textContent = '未選択';
+        return;
       }
 
-      document.getElementById('current-room-label').textContent = currentRoom || '未選択';
-
-      const shelvesInRoom = currentRoom
-        ? locationMaster.filter(l => l.room === currentRoom).map(l => l.shelf).filter(Boolean)
-        : [];
-
-      if (!shelvesInRoom.includes(currentShelf)) {
-        currentShelf = shelvesInRoom[0] || "";
+      if (!currentRoom || !uniqueRooms.includes(currentRoom)) {
+        currentRoom = uniqueRooms[0];
       }
 
-      if (shelvesInRoom.length === 0) {
-        shelfContainer.innerHTML = isLocationsLoading
-          ? `<span class="text-xs text-slate-400">読み込み中...</span>`
-          : `<span class="text-xs text-slate-400">本棚が未登録です。「＋ この部屋に本棚を追加」から追加してください。</span>`;
-      } else {
-        shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
-          const active = shelf === currentShelf;
-          return `
-            <button onclick='selectShelf(${JSON.stringify(shelf)})'
-              class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
-                active
-                  ? 'bg-teal-800 text-white shadow-md ring-2 ring-teal-400 scale-[1.02]'
-                  : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
-              }">
-              🗄️ ${escapeHtml(shelf)}
-            </button>
-          `;
-        }).join('');
+      roomContainer.innerHTML = uniqueRooms.map(room => {
+        const active = room === currentRoom;
+        return `
+          <button type="button" onclick="selectRoom(${jsArg(room)})"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+              active
+                ? 'bg-brand-700 text-white shadow-md ring-2 ring-brand-300'
+                : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
+            }">
+            🚪 ${escapeHtml(room)}
+          </button>
+        `;
+      }).join('');
+
+      roomLabel.textContent = currentRoom;
+
+      const shelvesInRoom = [...new Set(
+        locationMaster.filter(l => l.room === currentRoom).map(l => l.shelf)
+      )];
+
+      if (shelvesInRoom.length > 0 && !shelvesInRoom.includes(currentShelf)) {
+        currentShelf = shelvesInRoom[0];
       }
 
-      document.getElementById('selected-location-badge').textContent =
-        (currentRoom && currentShelf) ? `${currentRoom} ＞ ${currentShelf}` : '未選択';
+      shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
+        const active = shelf === currentShelf;
+        return `
+          <button type="button" onclick="selectShelf(${jsArg(shelf)})"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+              active
+                ? 'bg-teal-700 text-white shadow-md ring-2 ring-teal-300'
+                : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
+            }">
+            🗄️ ${escapeHtml(shelf)}
+          </button>
+        `;
+      }).join('');
+
+      locBadge.textContent = currentRoom && currentShelf
+        ? `${currentRoom} ＞ ${currentShelf}`
+        : '未選択';
+
+      updateBulkLocationSelectors();
     }
 
     function selectRoom(room) {
@@ -919,18 +973,18 @@
       shelfInput.value = '';
       toggleNewRoomForm();
       renderRoomAndShelfSelectors();
+      renderSearchFilterChips();
       showToast(`「${newRoom} ＞ ${newShelf}」を追加しました`, 'success');
       await saveNewLocationToGas(newRoom, newShelf);
     }
 
     async function addNewShelfToCurrentRoom() {
-      const shelfInput = document.getElementById('input-new-shelf');
-      const newShelf = shelfInput.value.trim();
-
       if (!currentRoom) {
-        showToast('先に部屋を選択または追加してください', 'warning');
+        showToast('先に「＋ 新しい部屋を追加」から部屋を作成してください', 'warning');
         return;
       }
+      const shelfInput = document.getElementById('input-new-shelf');
+      const newShelf = shelfInput.value.trim();
 
       if (!newShelf) {
         showToast('新しい本棚名を入力してください', 'warning');
@@ -944,6 +998,7 @@
       shelfInput.value = '';
       toggleNewShelfForm();
       renderRoomAndShelfSelectors();
+      renderSearchFilterChips();
       showToast(`「${currentRoom}」に「${newShelf}」を追加しました`, 'success');
       await saveNewLocationToGas(currentRoom, newShelf);
     }
@@ -963,110 +1018,112 @@
 
     /**
      * =====================================================================
-     * カメラバーコードリーダー制御（iPadOS・PCカメラ対応）
+     * カメラバーコードリーダー制御（iPad / スマホ / PC Webカメラ 3段階安定起動）
      * =====================================================================
      */
-    function createScannerInstance() {
-      const readerEl = document.getElementById('reader');
-      if (readerEl) {
-        readerEl.innerHTML = '';
+    async function resetScannerInstance() {
+      if (html5QrCode) {
+        try {
+          if (isScannerRunning) {
+            await html5QrCode.stop();
+          }
+        } catch (e) {}
+        try {
+          html5QrCode.clear();
+        } catch (e) {}
+        html5QrCode = null;
       }
-      html5QrCode = new Html5Qrcode("reader", {
+      const readerEl = document.getElementById('reader');
+      if (readerEl) readerEl.innerHTML = '';
+    }
+
+    function createFreshScanner() {
+      return new Html5Qrcode("reader", {
         formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
         experimentalFeatures: {
           useBarCodeDetectorIfSupported: true
         },
         verbose: false
       });
-      return html5QrCode;
+    }
+
+    function buildScannerConfig() {
+      return {
+        fps: 15,
+        qrbox: function(viewfinderWidth, viewfinderHeight) {
+          const safeW = Math.max(120, viewfinderWidth - 24);
+          const safeH = Math.max(70, viewfinderHeight - 24);
+          const boxWidth = Math.min(Math.max(Math.floor(viewfinderWidth * 0.84), 220), 500, safeW);
+          const boxHeight = Math.min(Math.max(Math.floor(viewfinderHeight * 0.35), 90), 170, safeH);
+          return { width: boxWidth, height: boxHeight };
+        }
+      };
     }
 
     async function startScanner() {
-      if (isScannerRunning) return;
+      if (isScannerRunning || isScannerStarting) return;
 
+      if (typeof Html5Qrcode === 'undefined') {
+        showToast('バーコード読取ライブラリの読み込みに失敗しました。ページを再読み込みしてください', 'error');
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('このブラウザ環境ではカメラを利用できません（HTTPSで開くか「写真から読取」をご利用ください）', 'error');
+        return;
+      }
+
+      isScannerStarting = true;
       const placeholder = document.getElementById('camera-placeholder');
       const btnStart = document.getElementById('btn-start-camera');
       const btnStop = document.getElementById('btn-stop-camera');
+      const config = buildScannerConfig();
+
+      let lastErr = null;
+      let started = false;
+
+      const tryStartWith = async (cameraSource) => {
+        await resetScannerInstance();
+        html5QrCode = createFreshScanner();
+        await html5QrCode.start(cameraSource, config, onScanSuccess, () => {});
+        return true;
+      };
 
       try {
-        const safeQrBox = function(viewfinderWidth, viewfinderHeight) {
-          const maxW = Math.max(50, viewfinderWidth - 16);
-          const maxH = Math.max(50, viewfinderHeight - 16);
-          const targetW = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
-          const targetH = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
-          return {
-            width: Math.min(Math.max(targetW, 200), maxW),
-            height: Math.min(Math.max(targetH, 80), maxH)
-          };
-        };
-
-        const simpleConfig = {
-          fps: 15,
-          qrbox: safeQrBox
-        };
-
-        let lastErr = null;
-        let started = false;
-
-        // 1. まずデバイス列挙なしで背面カメラ起動を直接試行（最も高速で権限競合が起きにくい）
-        const directTargets = [
-          { facingMode: "environment" },
-          { facingMode: "user" }
-        ];
-
-        for (const target of directTargets) {
-          try {
-            if (html5QrCode) {
-              try { await html5QrCode.stop(); } catch (e) {}
-              try { html5QrCode.clear(); } catch (e) {}
-            }
-            const scanner = createScannerInstance();
-            await scanner.start(target, simpleConfig, onScanSuccess, () => {});
-            started = true;
-            break;
-          } catch (err) {
-            lastErr = err;
-            console.warn('Direct camera start failed:', target, err);
+        // 第1段階：背面カメラ優先（iPad / スマホ向け）
+        try {
+          started = await tryStartWith({ facingMode: "environment" });
+        } catch (err1) {
+          lastErr = err1;
+          if (/NotAllowedError|PermissionDenied/i.test(String(err1 || ''))) {
+            throw err1;
           }
         }
 
-        // 2. 直接起動が通らない環境（PC等の複数カメラ選択が必要な環境）のみカメラID一覧から試行
+        // 第2段階：カメラ一覧から背面または先頭カメラを指定して起動（PC Webカメラ対応）
         if (!started) {
           try {
             const cameras = await Html5Qrcode.getCameras();
             if (cameras && cameras.length > 0) {
-              const sorted = [...cameras].sort((a, b) => {
-                const aBack = /back|rear|environment|背面/i.test(a.label || '') ? 0 : 1;
-                const bBack = /back|rear|environment|背面/i.test(b.label || '') ? 0 : 1;
-                return aBack - bBack;
-              });
-              for (const cam of sorted) {
-                try {
-                  if (html5QrCode) {
-                    try { await html5QrCode.stop(); } catch (e) {}
-                    try { html5QrCode.clear(); } catch (e) {}
-                  }
-                  const scanner = createScannerInstance();
-                  await scanner.start(cam.id, simpleConfig, onScanSuccess, () => {});
-                  started = true;
-                  break;
-                } catch (camErr) {
-                  lastErr = camErr;
-                  console.warn('Camera ID start failed:', cam.id, camErr);
-                }
-              }
+              const preferred = cameras.find(c => /back|rear|environment|背面/i.test(c.label || '')) || cameras[0];
+              started = await tryStartWith(preferred.id);
             }
-          } catch (listErr) {
-            lastErr = listErr;
+          } catch (err2) {
+            lastErr = err2;
+          }
+        }
+
+        // 第3段階：標準（前面）カメラ指定でフォールバック起動
+        if (!started) {
+          try {
+            started = await tryStartWith({ facingMode: "user" });
+          } catch (err3) {
+            lastErr = err3;
           }
         }
 
         if (!started) {
-          console.error('Camera start error:', lastErr);
-          isScannerRunning = false;
-          const errDetail = lastErr ? (lastErr.name || lastErr.message || String(lastErr)) : '不明なエラー';
-          showToast(`カメラを起動できませんでした（${errDetail}）。カメラ許可や他アプリの使用状況をご確認ください`, 'error');
-          return;
+          throw lastErr || new Error('利用可能なカメラが見つかりません');
         }
 
         isScannerRunning = true;
@@ -1074,7 +1131,7 @@
         btnStart.classList.add('hidden');
         btnStop.classList.remove('hidden');
 
-        // ズーム対応カメラであればスライダーを表示し初期1.5xに設定
+        // ズーム対応カメラ（主にiPad/スマホ背面）ならスライダーを表示し初期1.5xに設定
         try {
           const capabilities = html5QrCode.getRunningTrackCapabilities();
           if (capabilities && capabilities.zoom) {
@@ -1090,10 +1147,116 @@
             await handleZoomChange(initZ);
           }
         } catch (zoomErr) {}
-      } catch (fatalErr) {
-        console.error('Fatal startScanner error:', fatalErr);
+
+      } catch (err) {
+        console.error('Camera start error:', err);
+        await resetScannerInstance();
         isScannerRunning = false;
-        showToast(`カメラ起動処理でエラーが発生しました: ${fatalErr.message || fatalErr}`, 'error');
+        const msg = String((err && (err.message || err)) || '');
+        if (/NotAllowedError|Permission/i.test(msg)) {
+          showToast('カメラの使用が拒否されています。ブラウザの設定からカメラを許可してください', 'error');
+        } else if (/NotReadableError|TrackStartError/i.test(msg)) {
+          showToast('他のアプリがカメラを使用中です。他アプリを閉じてから再試行してください', 'error');
+        } else if (/NotFoundError|DevicesNotFound/i.test(msg)) {
+          showToast('カメラが検出できませんでした。「写真から読取」または手入力をお使いください', 'error');
+        } else {
+          showToast(`カメラを起動できませんでした（${msg || '不明なエラー'}）。「写真から読取」もお使いいただけます`, 'error');
+        }
+      } finally {
+        isScannerStarting = false;
+      }
+    }
+
+    async function handleZoomChange(val) {
+      document.getElementById('zoom-value-label').textContent = Number(val).toFixed(1);
+      if (!html5QrCode || !isScannerRunning) return;
+      try {
+        await html5QrCode.applyVideoConstraints({
+          advanced: [{ zoom: Number(val) }]
+        });
+      } catch (e) {}
+    }
+
+    async function stopScanner() {
+      if (!isScannerRunning && !html5QrCode) return;
+      await resetScannerInstance();
+      isScannerRunning = false;
+      document.getElementById('camera-placeholder').classList.remove('hidden');
+      document.getElementById('btn-start-camera').classList.remove('hidden');
+      document.getElementById('btn-stop-camera').classList.add('hidden');
+      document.getElementById('zoom-control-bar').classList.add('hidden');
+      document.getElementById('scan-live-hint').classList.add('hidden');
+    }
+
+    function onScanSuccess(decodedText) {
+      const cleaned = String(decodedText || '').replace(/[^0-9]/g, '');
+
+      // 下段の日本図書コード(192...)を拾った場合は画面上にリアルタイム誘導を出す
+      if (/^192\d{10}$/.test(cleaned)) {
+        const hint = document.getElementById('scan-live-hint');
+        hint.classList.remove('hidden');
+        clearTimeout(liveHintTimer);
+        liveHintTimer = setTimeout(() => hint.classList.add('hidden'), 1800);
+        return;
+      }
+
+      // 978 または 979 から始まる13桁ISBNのみ受け付け
+      if (!/^(978|979)\d{10}$/.test(cleaned)) {
+        return;
+      }
+
+      const now = Date.now();
+      if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+        return;
+      }
+
+      // 重複確認モーダルが開いている最中のみ一時停止（通常の通信中は次々キューに入れる）
+      if (pendingDuplicateData !== null) {
+        return;
+      }
+
+      lastScannedIsbn = cleaned;
+      lastScannedTime = now;
+      document.getElementById('scan-live-hint').classList.add('hidden');
+      enqueueBookScan(cleaned, false);
+    }
+
+    /**
+     * iPad標準カメラ等で撮影した静止画からバーコードを読み取る保険機能
+     */
+    async function handleImageFileScan(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (isScannerRunning) {
+        await stopScanner();
+      }
+
+      const badge = document.getElementById('scan-processing-badge');
+      const badgeText = document.getElementById('scan-processing-text');
+      badgeText.textContent = '撮影した写真からバーコードを解析中...';
+      badge.classList.remove('hidden');
+
+      try {
+        await resetScannerInstance();
+        html5QrCode = createFreshScanner();
+        const decodedText = await html5QrCode.scanFile(file, false);
+        const cleaned = String(decodedText || '').replace(/[^0-9]/g, '');
+
+        if (/^(978|979)\d{10}$/.test(cleaned)) {
+          badge.classList.add('hidden');
+          enqueueBookScan(cleaned, false);
+        } else if (/^192\d{10}$/.test(cleaned)) {
+          badge.classList.add('hidden');
+          showToast(`下の段の価格コード（${cleaned}）が写りました。上の段（978...）を中心に撮り直してください`, 'warning');
+        } else {
+          badge.classList.add('hidden');
+          showToast(`ISBN以外のコード（${cleaned}）が検出されました`, 'warning');
+        }
+      } catch (err) {
+        badge.classList.add('hidden');
+        showToast('写真からバーコードを読み取れませんでした。明るくピントが合った状態で再撮影してください', 'error');
       }
     }
 
@@ -1124,20 +1287,20 @@
      * =====================================================================
      */
     function enqueueBookScan(isbn, forceDuplicate = false, overrideRoom = null, overrideShelf = null) {
-      const targetRoom = overrideRoom || currentRoom;
-      const targetShelf = overrideShelf || currentShelf;
+      const targetRoom = (overrideRoom || currentRoom || '').trim();
+      const targetShelf = (overrideShelf || currentShelf || '').trim();
 
       if (!targetRoom || !targetShelf) {
-        showToast('先に「部屋」と「本棚」を選択または追加してください', 'warning');
+        playFeedbackSound('error');
+        showToast('先に登録先の「部屋」と「本棚」を追加・選択してください', 'warning');
         return;
       }
 
       const tempId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-
       playFeedbackSound('queued');
 
       const now = new Date();
-      const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+      const timeStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
       sessionScannedBooks.unshift({
         id: tempId,
@@ -1174,7 +1337,9 @@
         return;
       }
 
-      const waitingText = scanQueue.length > 0 ? `（待機中: 残り${scanQueue.length}冊 / 次の本も読込OK）` : '（次の本も読込OK）';
+      const waitingText = scanQueue.length > 0
+        ? `（待機中: 残り${scanQueue.length}冊 / 次の本も読込OK）`
+        : '（次の本も読込OK）';
       badgeText.textContent = currentIsbn
         ? `ISBN: ${currentIsbn} を登録中... ${waitingText}`
         : `キューを処理中... ${waitingText}`;
@@ -1186,9 +1351,9 @@
       isQueueWorkerRunning = true;
 
       try {
-        const scanner = createScannerInstance();
-        const decodedText = await scanner.scanFile(file, false);
-        const cleaned = decodedText.replace(/[^0-9]/g, '');
+        while (scanQueue.length > 0) {
+          if (pendingDuplicateData !== null) {
+            break;
           }
 
           const task = scanQueue.shift();
@@ -1224,7 +1389,17 @@
 
               onBookRegisteredSuccess(result.book, task.tempId);
             } else {
-              throw new Error('登録用GASのURLが設定されていません');
+              const existingLocal = allBooks.filter(b => b.isbn === task.isbn);
+              if (existingLocal.length > 0 && !task.forceDuplicate) {
+                sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== task.tempId);
+                renderSessionHistory();
+                playFeedbackSound('duplicate');
+                openDuplicateAlertModal(task.isbn, existingLocal, existingLocal.length + 1, task.room, task.shelf);
+                break;
+              }
+
+              const demoBook = await fetchBookDemoFallback(task.isbn, task.room, task.shelf, existingLocal.length + 1);
+              onBookRegisteredSuccess(demoBook, task.tempId);
             }
           } catch (err) {
             console.error('Register error:', err);
@@ -1245,6 +1420,40 @@
       }
     }
 
+    async function fetchBookDemoFallback(isbn, room, shelf, copyNumber) {
+      let title = `デモ登録本 (ISBN: ${isbn})`;
+      let author = '著者情報';
+      let publisher = '';
+      let coverUrl = '';
+      try {
+        const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
+        const json = await res.json();
+        if (json && json[0] && json[0].summary) {
+          title = json[0].summary.title || title;
+          author = json[0].summary.author || author;
+          publisher = json[0].summary.publisher || '';
+          coverUrl = json[0].summary.cover || '';
+        }
+      } catch (e) {}
+
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+      return {
+        id: 'demo-' + Date.now(),
+        timestamp,
+        isbn,
+        room,
+        shelf,
+        copyNumber,
+        title,
+        author,
+        publisher,
+        coverUrl,
+        note: ''
+      };
+    }
+
     function onBookRegisteredSuccess(book, tempId = null) {
       if (tempId) {
         const idx = sessionScannedBooks.findIndex(b => b.id === tempId);
@@ -1259,13 +1468,16 @@
 
       allBooks.unshift(book);
 
-      const existsLoc = locationMaster.some(l => l.room === book.room && l.shelf === book.shelf);
-      if (!existsLoc) {
+      if (!locationMaster.some(l => l.room === book.room && l.shelf === book.shelf)) {
         locationMaster.push({ room: book.room, shelf: book.shelf });
         renderRoomAndShelfSelectors();
       }
 
+      playFeedbackSound('success');
       renderSessionHistory();
+      renderSearchFilterChips();
+      renderBooksGrid();
+
       const copyText = book.copyNumber > 1 ? `【${book.copyNumber}冊目】` : '';
       showToast(`✅ ${copyText}『${book.title}』を【${book.room} ＞ ${book.shelf}】に登録しました`, 'success');
     }
@@ -1346,6 +1558,14 @@
           inAll.room = newRoom;
           inAll.shelf = newShelf;
         }
+        const inSession = sessionScannedBooks.find(b => b.id === targetBook.id);
+        if (inSession) {
+          inSession.room = newRoom;
+          inSession.shelf = newShelf;
+        }
+
+        renderSessionHistory();
+        renderSearchFilterChips();
         renderBooksGrid();
         showToast(`📦 『${targetBook.title}』を【${newRoom} ＞ ${newShelf}】へ移動しました`, 'success');
       } catch (err) {
@@ -1357,12 +1577,238 @@
 
     /**
      * =====================================================================
+     * チェック選択 ＆ 本棚の一括引っ越し（再スキャン不要・GAS連携）
+     * =====================================================================
+     */
+    function toggleBookSelection(bookId, event) {
+      if (event) event.stopPropagation();
+      if (!bookId) return;
+
+      if (selectedBookIds.has(bookId)) {
+        selectedBookIds.delete(bookId);
+      } else {
+        selectedBookIds.add(bookId);
+      }
+
+      renderSessionHistory();
+      renderBooksGrid();
+      updateBulkUpdateBar();
+    }
+
+    function getFilteredBooks() {
+      const queryEl = document.getElementById('search-query-input');
+      const sortEl = document.getElementById('sort-select');
+      const query = (queryEl ? queryEl.value : '').trim().toLowerCase();
+      const sortBy = sortEl ? sortEl.value : 'newest';
+
+      const filtered = allBooks.filter(book => {
+        if (activeRoomFilter !== 'ALL' && book.room !== activeRoomFilter) return false;
+        if (activeShelfFilter !== 'ALL' && book.shelf !== activeShelfFilter) return false;
+        if (!query) return true;
+        const target = `${book.title} ${book.author} ${book.publisher} ${book.isbn} ${book.room} ${book.shelf} ${book.note || ''}`.toLowerCase();
+        return target.includes(query);
+      });
+
+      filtered.sort((a, b) => {
+        if (sortBy === 'newest') return (b.timestamp || '').localeCompare(a.timestamp || '');
+        if (sortBy === 'oldest') return (a.timestamp || '').localeCompare(b.timestamp || '');
+        if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '', 'ja');
+        if (sortBy === 'location') {
+          return `${a.room}${a.shelf}`.localeCompare(`${b.room}${b.shelf}`, 'ja');
+        }
+        return 0;
+      });
+
+      return filtered;
+    }
+
+    function selectAllFilteredBooks() {
+      const filtered = getFilteredBooks();
+      if (filtered.length === 0) {
+        showToast('チェック対象の本がありません', 'info');
+        return;
+      }
+
+      const allAlreadySelected = filtered.every(b => selectedBookIds.has(b.id));
+      if (allAlreadySelected) {
+        filtered.forEach(b => selectedBookIds.delete(b.id));
+      } else {
+        filtered.forEach(b => selectedBookIds.add(b.id));
+      }
+
+      renderSessionHistory();
+      renderBooksGrid();
+      updateBulkUpdateBar();
+    }
+
+    function clearBookSelection() {
+      selectedBookIds.clear();
+      renderSessionHistory();
+      renderBooksGrid();
+      updateBulkUpdateBar();
+    }
+
+    function getAllKnownLocations() {
+      const map = new Map();
+      const add = (r, s) => {
+        const room = String(r || '').trim();
+        const shelf = String(s || '').trim();
+        if (!room || !shelf) return;
+        if (!map.has(room)) map.set(room, new Set());
+        map.get(room).add(shelf);
+      };
+      locationMaster.forEach(l => add(l.room, l.shelf));
+      allBooks.forEach(b => add(b.room, b.shelf));
+      return map;
+    }
+
+    function updateBulkLocationSelectors() {
+      const roomSelect = document.getElementById('bulk-target-room');
+      const shelfSelect = document.getElementById('bulk-target-shelf');
+      if (!roomSelect || !shelfSelect) return;
+
+      const locMap = getAllKnownLocations();
+      const rooms = [...locMap.keys()];
+
+      if (rooms.length === 0) {
+        roomSelect.innerHTML = `<option value="">部屋が未登録</option>`;
+        shelfSelect.innerHTML = `<option value="">本棚が未登録</option>`;
+        return;
+      }
+
+      const prevRoom = roomSelect.value;
+      const selectedRoom = rooms.includes(prevRoom)
+        ? prevRoom
+        : (rooms.includes(currentRoom) ? currentRoom : rooms[0]);
+
+      roomSelect.innerHTML = rooms.map(r =>
+        `<option value="${escapeHtml(r)}" ${r === selectedRoom ? 'selected' : ''}>🚪 ${escapeHtml(r)}</option>`
+      ).join('');
+
+      const shelves = [...(locMap.get(selectedRoom) || [])];
+      const prevShelf = shelfSelect.value;
+      const selectedShelf = shelves.includes(prevShelf)
+        ? prevShelf
+        : (shelves.includes(currentShelf) ? currentShelf : (shelves[0] || ''));
+
+      shelfSelect.innerHTML = shelves.map(s =>
+        `<option value="${escapeHtml(s)}" ${s === selectedShelf ? 'selected' : ''}>🗄️ ${escapeHtml(s)}</option>`
+      ).join('');
+    }
+
+    function handleBulkRoomChange() {
+      const roomSelect = document.getElementById('bulk-target-room');
+      const shelfSelect = document.getElementById('bulk-target-shelf');
+      const locMap = getAllKnownLocations();
+      const shelves = [...(locMap.get(roomSelect.value) || [])];
+      shelfSelect.innerHTML = shelves.map(s =>
+        `<option value="${escapeHtml(s)}">🗄️ ${escapeHtml(s)}</option>`
+      ).join('');
+    }
+
+    function updateBulkUpdateBar() {
+      const bar = document.getElementById('bulk-update-bar');
+      const spacer = document.getElementById('bulk-bar-spacer');
+      const countEl = document.getElementById('bulk-selected-count');
+
+      if (selectedBookIds.size > 0) {
+        countEl.textContent = selectedBookIds.size;
+        updateBulkLocationSelectors();
+        bar.classList.remove('hidden');
+        spacer.classList.remove('hidden');
+      } else {
+        bar.classList.add('hidden');
+        spacer.classList.add('hidden');
+      }
+    }
+
+    async function executeBulkLocationUpdate() {
+      if (isBulkUpdating || selectedBookIds.size === 0) return;
+
+      const targetRoom = document.getElementById('bulk-target-room').value.trim();
+      const targetShelf = document.getElementById('bulk-target-shelf').value.trim();
+
+      if (!targetRoom || !targetShelf) {
+        showToast('移動先の「部屋」と「本棚」を選択してください', 'warning');
+        return;
+      }
+
+      const ids = [...selectedBookIds];
+      const btn = document.getElementById('btn-execute-bulk-update');
+      isBulkUpdating = true;
+      btn.disabled = true;
+
+      let successCount = 0;
+      const failedIds = [];
+
+      try {
+        for (let i = 0; i < ids.length; i++) {
+          const bookId = ids[i];
+          btn.textContent = `更新中 (${i + 1}/${ids.length})...`;
+
+          try {
+            if (registerGasUrl && registerGasUrl.startsWith('http')) {
+              const res = await fetch(registerGasUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                  action: 'updateBook',
+                  id: bookId,
+                  room: targetRoom,
+                  shelf: targetShelf
+                })
+              });
+              const data = await res.json();
+              if (data.status !== 'success') {
+                throw new Error(data.message || 'GAS更新エラー');
+              }
+            }
+
+            const syncLocal = (arr) => {
+              const item = arr.find(b => b.id === bookId);
+              if (item) {
+                item.room = targetRoom;
+                item.shelf = targetShelf;
+              }
+            };
+            syncLocal(allBooks);
+            syncLocal(sessionScannedBooks);
+            selectedBookIds.delete(bookId);
+            successCount++;
+          } catch (itemErr) {
+            console.error(`Bulk update item error (${bookId}):`, itemErr);
+            failedIds.push(bookId);
+          }
+        }
+
+        renderSessionHistory();
+        renderSearchFilterChips();
+        renderBooksGrid();
+        updateBulkUpdateBar();
+
+        if (failedIds.length === 0) {
+          showToast(`📦 ${successCount}冊を【${targetRoom} ＞ ${targetShelf}】へ一括更新しました`, 'success');
+        } else if (successCount > 0) {
+          showToast(`${successCount}冊を更新しましたが、${failedIds.length}冊の更新に失敗しました`, 'warning');
+        } else {
+          showToast('一括更新に失敗しました。API設定や通信環境を確認してください', 'error');
+        }
+      } finally {
+        isBulkUpdating = false;
+        btn.disabled = false;
+        btn.textContent = 'チェックした本を一括更新';
+      }
+    }
+
+    /**
+     * =====================================================================
      * セッション履歴 ＆ 蔵書探索・フィルタ描画
      * =====================================================================
      */
     function renderSessionHistory() {
       const container = document.getElementById('session-history-list');
       document.getElementById('session-count').textContent = sessionScannedBooks.length;
+
       if (sessionScannedBooks.length === 0) {
         container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">まだスキャン履歴はありません。上のカメラから本を読み取ってください。</p>`;
         return;
@@ -1392,14 +1838,18 @@
           `;
         }
 
+        const checked = selectedBookIds.has(book.id);
         return `
-          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="flex items-center gap-3 p-2.5 rounded-xl border transition cursor-pointer ${selectedBookIds.has(book.id) ? 'bg-brand-50/70 border-brand-400 ring-1 ring-brand-400' : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100/80'}">
-            <label onclick="event.stopPropagation()" class="shrink-0 flex items-center justify-center p-1 cursor-pointer">
-              <input type="checkbox" ${selectedBookIds.has(book.id) ? 'checked' : ''}
-                onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
-                class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
-            </label>
+          <div onclick="openBookDetailModal(${jsArg(book.id)})"
+            class="flex items-center gap-3 p-2.5 rounded-xl border transition cursor-pointer ${
+              checked
+                ? 'bg-brand-50/70 border-brand-500 ring-2 ring-brand-300'
+                : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100/80'
+            }">
+            <input type="checkbox" ${checked ? 'checked' : ''}
+              onclick="toggleBookSelection(${jsArg(book.id)}, event)"
+              aria-label="一括移動用に選択"
+              class="w-4 h-4 rounded accent-brand-700 cursor-pointer shrink-0">
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                  data-isbn="${escapeHtml(book.isbn)}"
                  data-step="0"
@@ -1416,7 +1866,7 @@
               <p class="text-xs font-bold text-slate-900 truncate">${escapeHtml(book.title)}</p>
               <p class="text-[11px] text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
             </div>
-            <span class="text-[10px] font-mono text-slate-400 shrink-0">${(book.timestamp || '').split(' ')[1] || ''}</span>
+            <span class="text-[10px] font-mono text-slate-400 shrink-0">${escapeHtml((book.timestamp || '').split(' ')[1] || '')}</span>
           </div>
         `;
       }).join('');
@@ -1433,9 +1883,17 @@
       ])];
 
       roomContainer.innerHTML = [
-        `<button onclick="setRoomFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === 'ALL' ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-400' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}">すべて</button>`,
+        `<button type="button" onclick="setRoomFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+          activeRoomFilter === 'ALL'
+            ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-300'
+            : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
+        }">すべて</button>`,
         ...rooms.map(r => `
-          <button onclick='setRoomFilter(${JSON.stringify(r)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === r ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-400' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}">
+          <button type="button" onclick="setRoomFilter(${jsArg(r)})" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+            activeRoomFilter === r
+              ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-300'
+              : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
+          }">
             🚪 ${escapeHtml(r)}
           </button>
         `)
@@ -1447,9 +1905,17 @@
       ])];
 
       shelfContainer.innerHTML = [
-        `<button onclick="setShelfFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === 'ALL' ? 'bg-teal-800 text-white shadow-sm ring-2 ring-teal-400' : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'}">すべての棚</button>`,
+        `<button type="button" onclick="setShelfFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+          activeShelfFilter === 'ALL'
+            ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-300'
+            : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
+        }">すべての棚</button>`,
         ...shelves.map(s => `
-          <button onclick='setShelfFilter(${JSON.stringify(s)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === s ? 'bg-teal-800 text-white shadow-sm ring-2 ring-teal-400' : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'}">
+          <button type="button" onclick="setShelfFilter(${jsArg(s)})" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+            activeShelfFilter === s
+              ? 'bg-teal-700 text-white shadow-sm ring-2 ring-teal-300'
+              : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
+          }">
             🗄️ ${escapeHtml(s)}
           </button>
         `)
@@ -1476,28 +1942,20 @@
 
     function renderBooksGrid() {
       const container = document.getElementById('books-container');
-      const query = document.getElementById('search-query-input').value.trim().toLowerCase();
-      const sortBy = document.getElementById('sort-select').value;
+      if (!container) return;
 
-      let filtered = allBooks.filter(book => {
-        if (activeRoomFilter !== 'ALL' && book.room !== activeRoomFilter) return false;
-        if (activeShelfFilter !== 'ALL' && book.shelf !== activeShelfFilter) return false;
-        if (!query) return true;
-        const target = `${book.title} ${book.author} ${book.publisher} ${book.isbn} ${book.room} ${book.shelf} ${book.note || ''}`.toLowerCase();
-        return target.includes(query);
-      });
-
-      filtered.sort((a, b) => {
-        if (sortBy === 'newest') return (b.timestamp || '').localeCompare(a.timestamp || '');
-        if (sortBy === 'oldest') return (a.timestamp || '').localeCompare(b.timestamp || '');
-        if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '', 'ja');
-        if (sortBy === 'location') {
-          return `${a.room}${a.shelf}`.localeCompare(`${b.room}${b.shelf}`, 'ja');
-        }
-        return 0;
-      });
-
+      const filtered = getFilteredBooks();
       document.getElementById('filtered-books-count').textContent = filtered.length;
+
+      if (isLocationsLoading) {
+        container.className = 'block';
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-10 text-center border border-slate-200/80">
+            <p class="text-sm font-bold text-slate-600">蔵書データを読み込み中...</p>
+          </div>
+        `;
+        return;
+      }
 
       if (filtered.length === 0) {
         container.className = 'block';
@@ -1513,259 +1971,89 @@
       if (isGridView) {
         container.className = 'grid grid-cols-2 sm:grid-cols-3 gap-3';
         container.innerHTML = filtered.map(book => {
-          const isChecked = selectedBookIds.has(book.id);
+          const checked = selectedBookIds.has(book.id);
           return `
-          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="bg-white rounded-2xl overflow-hidden border transition cursor-pointer flex flex-col ${isChecked ? 'border-brand-500 ring-2 ring-brand-400 shadow-md' : 'border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.98]'}">
-            <div class="relative aspect-[3/4] bg-slate-100 overflow-hidden">
-              <label onclick="event.stopPropagation()" class="absolute top-2 left-2 z-10 w-7 h-7 rounded-lg bg-white/95 shadow-sm border border-slate-300 flex items-center justify-center cursor-pointer">
-                <input type="checkbox" ${isChecked ? 'checked' : ''}
-                  onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
-                  class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
-              </label>
+            <div onclick="openBookDetailModal(${jsArg(book.id)})"
+              class="rounded-2xl overflow-hidden border shadow-xs hover:shadow-md active:scale-[0.98] transition cursor-pointer flex flex-col ${
+                checked
+                  ? 'bg-brand-50/50 border-brand-600 ring-2 ring-brand-400'
+                  : 'bg-white border-slate-200/80'
+              }">
+              <div class="relative aspect-[3/4] bg-slate-100 overflow-hidden">
+                <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
+                     data-isbn="${escapeHtml(book.isbn)}"
+                     data-step="0"
+                     onload="handleCoverLoad(this)"
+                     onerror="handleCoverError(this)"
+                     alt="${escapeHtml(book.title)}"
+                     class="w-full h-full object-cover">
+
+                <!-- 一括移動用チェックボックス -->
+                <label onclick="event.stopPropagation()" class="absolute top-2 left-2 z-10 w-7 h-7 rounded-lg flex items-center justify-center shadow-md cursor-pointer transition ${
+                  checked ? 'bg-brand-700' : 'bg-white/90 hover:bg-white'
+                }">
+                  <input type="checkbox" ${checked ? 'checked' : ''}
+                    onclick="toggleBookSelection(${jsArg(book.id)}, event)"
+                    aria-label="一括移動用に選択"
+                    class="w-4 h-4 accent-brand-700 cursor-pointer">
+                </label>
+
+                ${book.copyNumber > 1 ? `
+                  <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-xs">
+                    ${book.copyNumber}冊目
+                  </span>
+                ` : ''}
+                <div class="absolute bottom-2 left-2 right-2 px-2 py-1 rounded-lg bg-slate-900/85 backdrop-blur-xs text-white text-[10px] leading-tight">
+                  <div class="font-bold truncate">🚪 ${escapeHtml(book.room)}</div>
+                  <div class="text-slate-300 truncate">🗄️ ${escapeHtml(book.shelf)}</div>
+                </div>
+              </div>
+              <div class="p-3 flex-1 flex flex-col justify-between">
+                <h3 class="text-xs font-bold text-slate-900 line-clamp-2 leading-snug mb-1">
+                  ${escapeHtml(book.title)}
+                </h3>
+                <p class="text-[11px] text-slate-500 truncate">
+                  ${escapeHtml(book.author || '著者不明')}
+                </p>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        container.className = 'space-y-2.5';
+        container.innerHTML = filtered.map(book => {
+          const checked = selectedBookIds.has(book.id);
+          return `
+            <div onclick="openBookDetailModal(${jsArg(book.id)})"
+              class="rounded-2xl p-3 border shadow-xs hover:shadow-md active:scale-[0.99] transition cursor-pointer flex items-center gap-3 ${
+                checked
+                  ? 'bg-brand-50/70 border-brand-600 ring-2 ring-brand-300'
+                  : 'bg-white border-slate-200/80'
+              }">
+              <input type="checkbox" ${checked ? 'checked' : ''}
+                onclick="toggleBookSelection(${jsArg(book.id)}, event)"
+                aria-label="一括移動用に選択"
+                class="w-4 h-4 rounded accent-brand-700 cursor-pointer shrink-0">
               <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                    data-isbn="${escapeHtml(book.isbn)}"
                    data-step="0"
                    onload="handleCoverLoad(this)"
                    onerror="handleCoverError(this)"
                    alt="${escapeHtml(book.title)}"
-                   class="w-full h-full object-cover">
-              ${book.copyNumber > 1 ? `
-                <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-xs">
-                  ${book.copyNumber}冊目
-                </span>
-              ` : ''}
-              <div class="absolute bottom-2 left-2 right-2 px-2 py-1 rounded-lg bg-slate-900/85 backdrop-blur-xs text-white text-[10px] leading-tight">
-                <div class="font-bold truncate">🚪 ${escapeHtml(book.room)}</div>
-                <div class="text-slate-300 truncate">🗄️ ${escapeHtml(book.shelf)}</div>
+                   class="w-14 h-20 object-cover rounded-xl bg-slate-100 shrink-0 border border-slate-100">
+              <div class="min-w-0 flex-1 space-y-1">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[11px] font-bold">
+                    🚪 ${escapeHtml(book.room)} ＞ 🗄️ ${escapeHtml(book.shelf)}
+                  </span>
+                  ${book.copyNumber > 1 ? `<span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${book.copyNumber}冊目</span>` : ''}
+                </div>
+                <h3 class="text-sm font-bold text-slate-900 line-clamp-1">${escapeHtml(book.title)}</h3>
+                <p class="text-xs text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
               </div>
             </div>
-            <div class="p-3 flex-1 flex flex-col justify-between">
-              <h3 class="text-xs font-bold text-slate-900 line-clamp-2 leading-snug mb-1">
-                ${escapeHtml(book.title)}
-              </h3>
-              <p class="text-[11px] text-slate-500 truncate">
-                ${escapeHtml(book.author || '著者不明')}
-              </p>
-            </div>
-          </div>
-        `;
+          `;
         }).join('');
-      } else {
-        container.className = 'space-y-2.5';
-        container.innerHTML = filtered.map(book => {
-          const isChecked = selectedBookIds.has(book.id);
-          return `
-          <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="bg-white rounded-2xl p-3 border transition cursor-pointer flex items-center gap-3 ${isChecked ? 'border-brand-500 ring-2 ring-brand-400 bg-brand-50/40 shadow-md' : 'border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.99]'}">
-            <label onclick="event.stopPropagation()" class="shrink-0 flex items-center justify-center p-1 cursor-pointer">
-              <input type="checkbox" ${isChecked ? 'checked' : ''}
-                onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
-                class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
-            </label>
-            <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
-                 data-isbn="${escapeHtml(book.isbn)}"
-                 data-step="0"
-                 onload="handleCoverLoad(this)"
-                 onerror="handleCoverError(this)"
-                 alt="${escapeHtml(book.title)}"
-                 class="w-14 h-20 object-cover rounded-xl bg-slate-100 shrink-0 border border-slate-100">
-            <div class="min-w-0 flex-1 space-y-1">
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[11px] font-bold">
-                  🚪 ${escapeHtml(book.room)} ＞ 🗄️ ${escapeHtml(book.shelf)}
-                </span>
-                ${book.copyNumber > 1 ? `<span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">${book.copyNumber}冊目</span>` : ''}
-              </div>
-              <h3 class="text-sm font-bold text-slate-900 line-clamp-1">${escapeHtml(book.title)}</h3>
-              <p class="text-xs text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
-            </div>
-          </div>
-        `;
-        }).join('');
-      }
-    }
-
-    /**
-     * =====================================================================
-     * チェック選択による保管場所（部屋・本棚）の一括更新処理
-     * =====================================================================
-     */
-    function toggleBookSelection(bookId, event) {
-      if (event) event.stopPropagation();
-      if (selectedBookIds.has(bookId)) {
-        selectedBookIds.delete(bookId);
-      } else {
-        selectedBookIds.add(bookId);
-      }
-      updateBulkUpdateBar();
-      renderSessionHistory();
-      renderBooksGrid();
-    }
-
-    function selectAllFilteredBooks() {
-      const query = document.getElementById('search-query-input').value.trim().toLowerCase();
-      const filtered = allBooks.filter(book => {
-        if (activeRoomFilter !== 'ALL' && book.room !== activeRoomFilter) return false;
-        if (activeShelfFilter !== 'ALL' && book.shelf !== activeShelfFilter) return false;
-        if (!query) return true;
-        const target = `${book.title} ${book.author} ${book.publisher} ${book.isbn} ${book.room} ${book.shelf} ${book.note || ''}`.toLowerCase();
-        return target.includes(query);
-      });
-
-      if (filtered.length === 0) return;
-      filtered.forEach(b => selectedBookIds.add(b.id));
-      updateBulkUpdateBar();
-      renderSessionHistory();
-      renderBooksGrid();
-    }
-
-    function clearBookSelection() {
-      selectedBookIds.clear();
-      updateBulkUpdateBar();
-      renderSessionHistory();
-      renderBooksGrid();
-    }
-
-    function updateBulkUpdateBar() {
-      const bar = document.getElementById('bulk-update-bar');
-      const spacer = document.getElementById('bulk-bar-spacer');
-      const countEl = document.getElementById('bulk-selected-count');
-      if (!bar || !spacer || !countEl) return;
-
-      const count = selectedBookIds.size;
-      countEl.textContent = count;
-
-      if (count === 0) {
-        bar.classList.add('hidden');
-        spacer.classList.add('hidden');
-        return;
-      }
-
-      populateBulkLocationSelects();
-      bar.classList.remove('hidden');
-      spacer.classList.remove('hidden');
-    }
-
-    function populateBulkLocationSelects() {
-      const roomSelect = document.getElementById('bulk-target-room');
-      const shelfSelect = document.getElementById('bulk-target-shelf');
-      if (!roomSelect || !shelfSelect) return;
-
-      const prevRoom = roomSelect.value;
-      const rooms = [...new Set([
-        ...locationMaster.map(l => l.room),
-        ...allBooks.map(b => b.room).filter(Boolean)
-      ].filter(Boolean))];
-
-      const selectedRoom = rooms.includes(prevRoom) ? prevRoom : (currentRoom || rooms[0] || '');
-      roomSelect.innerHTML = rooms.map(r =>
-        `<option value="${escapeHtml(r)}" ${r === selectedRoom ? 'selected' : ''}>🚪 ${escapeHtml(r)}</option>`
-      ).join('');
-
-      updateBulkShelfOptions(selectedRoom, shelfSelect.value);
-    }
-
-    function updateBulkShelfOptions(roomName, preferredShelf = '') {
-      const shelfSelect = document.getElementById('bulk-target-shelf');
-      if (!shelfSelect) return;
-
-      const shelves = [...new Set([
-        ...locationMaster.filter(l => l.room === roomName).map(l => l.shelf),
-        ...allBooks.filter(b => b.room === roomName).map(b => b.shelf).filter(Boolean)
-      ].filter(Boolean))];
-
-      const selectedShelf = shelves.includes(preferredShelf) ? preferredShelf : (shelves[0] || '');
-      shelfSelect.innerHTML = shelves.map(s =>
-        `<option value="${escapeHtml(s)}" ${s === selectedShelf ? 'selected' : ''}>🗄️ ${escapeHtml(s)}</option>`
-      ).join('');
-    }
-
-    function handleBulkRoomChange() {
-      const roomSelect = document.getElementById('bulk-target-room');
-      if (!roomSelect) return;
-      updateBulkShelfOptions(roomSelect.value, '');
-    }
-
-    async function executeBulkLocationUpdate() {
-      if (isBulkUpdating || selectedBookIds.size === 0) return;
-
-      const newRoom = (document.getElementById('bulk-target-room').value || '').trim();
-      const newShelf = (document.getElementById('bulk-target-shelf').value || '').trim();
-
-      if (!newRoom || !newShelf) {
-        showToast('移動先の部屋と本棚を選択してください', 'warning');
-        return;
-      }
-
-      const targetIds = Array.from(selectedBookIds);
-      const btn = document.getElementById('btn-execute-bulk-update');
-      isBulkUpdating = true;
-      btn.disabled = true;
-      btn.textContent = `更新中... (0/${targetIds.length})`;
-
-      let successCount = 0;
-      let failCount = 0;
-
-      try {
-        for (let i = 0; i < targetIds.length; i++) {
-          const bookId = targetIds[i];
-          const book = allBooks.find(b => b.id === bookId) || sessionScannedBooks.find(b => b.id === bookId);
-          if (!book) continue;
-
-          btn.textContent = `更新中... (${i + 1}/${targetIds.length})`;
-
-          try {
-            if (registerGasUrl && registerGasUrl.startsWith('http')) {
-              const res = await fetch(registerGasUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                  action: 'updateBook',
-                  id: book.id,
-                  title: book.title,
-                  author: book.author || '',
-                  room: newRoom,
-                  shelf: newShelf,
-                  note: book.note || ''
-                })
-              });
-              const data = await res.json();
-              if (data.status !== 'success') throw new Error(data.message || '更新失敗');
-            }
-
-            const inAll = allBooks.find(b => b.id === bookId);
-            if (inAll) {
-              inAll.room = newRoom;
-              inAll.shelf = newShelf;
-            }
-            const inSession = sessionScannedBooks.find(b => b.id === bookId);
-            if (inSession) {
-              inSession.room = newRoom;
-              inSession.shelf = newShelf;
-            }
-            successCount++;
-          } catch (err) {
-            console.error('Bulk update error:', bookId, err);
-            failCount++;
-          }
-        }
-
-        selectedBookIds.clear();
-        updateBulkUpdateBar();
-        renderSessionHistory();
-        renderSearchFilterChips();
-        renderBooksGrid();
-
-        if (failCount === 0) {
-          showToast(`✅ ${successCount}冊を【${newRoom} ＞ ${newShelf}】へ一括更新しました`, 'success');
-        } else {
-          showToast(`${successCount}冊を更新、${failCount}冊がエラーになりました`, 'warning');
-        }
-      } finally {
-        isBulkUpdating = false;
-        btn.disabled = false;
-        btn.textContent = 'チェックした本を一括更新';
       }
     }
 
@@ -1774,44 +2062,19 @@
      * 書籍詳細モーダル（タイトル・著者・部屋・本棚の移動、メモ更新、削除）
      * =====================================================================
      */
-    function populateModalLocationSelects(selectedRoom, selectedShelf) {
-      const roomSelect = document.getElementById('modal-new-room');
-      const shelfSelect = document.getElementById('modal-new-shelf');
-      if (!roomSelect || !shelfSelect) return;
+    function refreshModalLocationDatalists() {
+      const roomList = document.getElementById('modal-room-datalist');
+      const shelfList = document.getElementById('modal-shelf-datalist');
+      const locMap = getAllKnownLocations();
+      const rooms = [...locMap.keys()];
+      const allShelves = [...new Set([...locMap.values()].flatMap(set => [...set]))];
 
-      const rooms = [...new Set([
-        ...locationMaster.map(l => l.room),
-        ...allBooks.map(b => b.room).filter(Boolean),
-        selectedRoom
-      ].filter(Boolean))];
-
-      roomSelect.innerHTML = rooms.map(r =>
-        `<option value="${escapeHtml(r)}" ${r === selectedRoom ? 'selected' : ''}>${escapeHtml(r)}</option>`
-      ).join('');
-
-      const activeRoom = roomSelect.value || selectedRoom || '';
-      updateModalShelfOptions(activeRoom, selectedShelf);
-    }
-
-    function updateModalShelfOptions(roomName, preferredShelf = '') {
-      const shelfSelect = document.getElementById('modal-new-shelf');
-      if (!shelfSelect) return;
-
-      const shelves = [...new Set([
-        ...locationMaster.filter(l => l.room === roomName).map(l => l.shelf),
-        ...allBooks.filter(b => b.room === roomName).map(b => b.shelf).filter(Boolean),
-        preferredShelf
-      ].filter(Boolean))];
-
-      shelfSelect.innerHTML = shelves.map(s =>
-        `<option value="${escapeHtml(s)}" ${s === preferredShelf ? 'selected' : ''}>${escapeHtml(s)}</option>`
-      ).join('');
-    }
-
-    function handleModalRoomChange() {
-      const roomSelect = document.getElementById('modal-new-room');
-      if (!roomSelect) return;
-      updateModalShelfOptions(roomSelect.value, '');
+      if (roomList) {
+        roomList.innerHTML = rooms.map(r => `<option value="${escapeHtml(r)}"></option>`).join('');
+      }
+      if (shelfList) {
+        shelfList.innerHTML = allShelves.map(s => `<option value="${escapeHtml(s)}"></option>`).join('');
+      }
     }
 
     function openBookDetailModal(bookId) {
@@ -1845,8 +2108,10 @@
       const isUnregisteredTitle = !book.title || /^タイトル未登録/.test(book.title);
       document.getElementById('modal-new-title').value = isUnregisteredTitle ? '' : book.title;
       document.getElementById('modal-new-author').value = book.author || '';
-      populateModalLocationSelects(book.room, book.shelf);
+      document.getElementById('modal-new-room').value = book.room;
+      document.getElementById('modal-new-shelf').value = book.shelf;
       document.getElementById('modal-new-note').value = book.note || '';
+      refreshModalLocationDatalists();
 
       hideDeleteConfirm();
       document.getElementById('book-detail-modal').classList.remove('hidden');
@@ -1891,28 +2156,18 @@
           if (data.status !== 'success') throw new Error(data.message);
         }
 
-        selectedBookForModal.title = finalTitle;
-        selectedBookForModal.author = newAuthor;
-        selectedBookForModal.room = newRoom;
-        selectedBookForModal.shelf = newShelf;
-        selectedBookForModal.note = newNote;
+        const applyUpdate = (item) => {
+          if (!item) return;
+          item.title = finalTitle;
+          item.author = newAuthor;
+          item.room = newRoom;
+          item.shelf = newShelf;
+          item.note = newNote;
+        };
 
-        const inAll = allBooks.find(b => b.id === selectedBookForModal.id);
-        if (inAll && inAll !== selectedBookForModal) {
-          inAll.title = finalTitle;
-          inAll.author = newAuthor;
-          inAll.room = newRoom;
-          inAll.shelf = newShelf;
-          inAll.note = newNote;
-        }
-        const inSession = sessionScannedBooks.find(b => b.id === selectedBookForModal.id);
-        if (inSession && inSession !== selectedBookForModal) {
-          inSession.title = finalTitle;
-          inSession.author = newAuthor;
-          inSession.room = newRoom;
-          inSession.shelf = newShelf;
-          inSession.note = newNote;
-        }
+        applyUpdate(selectedBookForModal);
+        applyUpdate(allBooks.find(b => b.id === selectedBookForModal.id));
+        applyUpdate(sessionScannedBooks.find(b => b.id === selectedBookForModal.id));
 
         if (!locationMaster.some(l => l.room === newRoom && l.shelf === newShelf)) {
           locationMaster.push({ room: newRoom, shelf: newShelf });
@@ -1958,9 +2213,12 @@
 
         allBooks = allBooks.filter(b => b.id !== targetId);
         sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== targetId);
+        selectedBookIds.delete(targetId);
+
         renderSessionHistory();
         renderSearchFilterChips();
         renderBooksGrid();
+        updateBulkUpdateBar();
         closeBookDetailModal();
         showToast('蔵書リストから削除しました', 'info');
       } catch (err) {
@@ -1968,6 +2226,61 @@
       }
     }
 
+    /**
+     * =====================================================================
+     * 単独GAS 2本の連携設定モーダル制御
+     * =====================================================================
+     */
+    function openSettingsModal() {
+      document.getElementById('register-gas-url-input').value = registerGasUrl;
+      document.getElementById('search-gas-url-input').value = searchGasUrl;
+      document.getElementById('gas-test-result').classList.add('hidden');
+      document.getElementById('settings-modal').classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    async function saveGasUrlSettings() {
+      registerGasUrl = document.getElementById('register-gas-url-input').value.trim();
+      searchGasUrl   = document.getElementById('search-gas-url-input').value.trim();
+      updateConnectionBadge();
+      closeSettingsModal();
+      await fetchAllBooks(true);
+    }
+
+    async function testGasConnections() {
+      const regUrl = document.getElementById('register-gas-url-input').value.trim();
+      const schUrl = document.getElementById('search-gas-url-input').value.trim();
+      const box = document.getElementById('gas-test-result');
+      box.className = 'rounded-xl p-3 text-xs font-medium bg-slate-100 text-slate-700';
+      box.textContent = '接続テスト中...';
+      box.classList.remove('hidden');
+
+      const results = [];
+      for (const [label, url] of [['①登録GAS', regUrl], ['②検索GAS', schUrl]]) {
+        if (!url) {
+          results.push(`${label}: 未入力`);
+          continue;
+        }
+        try {
+          const res = await fetch(url);
+          const json = await res.json();
+          results.push(json.status === 'success' ? `${label}: ✅ 正常接続OK` : `${label}: ⚠️ 応答あり(${json.message})`);
+        } catch (e) {
+          results.push(`${label}: ❌ ブロック(Load failed) → GASのアクセス権を「全員」にしてください`);
+        }
+      }
+      box.className = 'rounded-xl p-3 text-xs font-bold bg-slate-800 text-white space-y-1';
+      box.innerHTML = results.map(r => `<div>${escapeHtml(r)}</div>`).join('');
+    }
+
+    /**
+     * =====================================================================
+     * 書影（表紙画像）多段階フォールバック ＆ ユーティリティ
+     * =====================================================================
+     */
     function isbn13ToIsbn10(isbn13) {
       const clean = String(isbn13 || '').replace(/[^0-9]/g, '');
       if (clean.length !== 13 || !clean.startsWith('978')) return '';
@@ -2000,7 +2313,6 @@
     }
 
     function getSafeCoverUrl(coverUrl, isbn) {
-      // 無効なopenbdデフォルトURL以外でDB保存済みURLがあれば最優先で試す
       if (coverUrl && coverUrl.startsWith('http') && !coverUrl.includes('cover.openbd.jp')) {
         return coverUrl.replace(/^http:\/\//i, 'https://');
       }
@@ -2009,7 +2321,6 @@
     }
 
     function handleCoverLoad(imgEl) {
-      // 1x1の透明ダミー画像が返された場合は失敗扱いにして次のソースへ進める
       if (imgEl.naturalWidth <= 2 || imgEl.naturalHeight <= 2) {
         handleCoverError(imgEl);
       }
@@ -2020,7 +2331,6 @@
       const candidates = getCoverCandidateUrls(isbn);
       let step = parseInt(imgEl.dataset.step || '0', 10);
 
-      // 現在表示中と同じURLをスキップしつつ次の候補へ進む
       while (step < candidates.length && candidates[step] === imgEl.src) {
         step++;
       }
@@ -2043,6 +2353,10 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    function jsArg(str) {
+      return escapeHtml(JSON.stringify(String(str ?? '')));
     }
   </script>
 </body>
