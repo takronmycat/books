@@ -541,16 +541,11 @@
     let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
     let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
 
-    let locationMaster = [
-      { room: "職員室", shelf: "共通・教務キャビネット" },
-      { room: "職員室", shelf: "窓際スチール棚A" },
-      { room: "理科準備室", shelf: "指導書・資料棚" },
-      { room: "社会科準備室", shelf: "地図・資料集ラック" },
-      { room: "進路指導室", shelf: "赤本・大学案内棚" }
-    ];
+    let locationMaster = [];
 
-    let currentRoom = "職員室";
-    let currentShelf = "共通・教務キャビネット";
+    let currentRoom = "";
+    let currentShelf = "";
+    let isLocationsLoading = true;
 
     let allBooks = [];
     let sessionScannedBooks = [];
@@ -717,6 +712,10 @@
           showToast(`データ読み込みに失敗しました: ${err.message}`, 'error');
         }
       } finally {
+        if (isLocationsLoading) {
+          isLocationsLoading = false;
+          renderRoomAndShelfSelectors();
+        }
         if (refreshIcon) refreshIcon.classList.remove('animate-spin');
       }
     }
@@ -786,7 +785,9 @@
       }
 
       if (uniqueRooms.length === 0) {
-        roomContainer.innerHTML = `<span class="text-xs text-slate-400">部屋が未登録です。「＋ 新しい部屋を追加」から追加してください。</span>`;
+        roomContainer.innerHTML = isLocationsLoading
+          ? `<span class="text-xs text-slate-400">読み込み中...</span>`
+          : `<span class="text-xs text-slate-400">部屋が未登録です。「＋ 新しい部屋を追加」から追加してください。</span>`;
       } else {
         roomContainer.innerHTML = uniqueRooms.map(room => {
           const active = room === currentRoom;
@@ -814,7 +815,9 @@
       }
 
       if (shelvesInRoom.length === 0) {
-        shelfContainer.innerHTML = `<span class="text-xs text-slate-400">本棚が未登録です。「＋ この部屋に本棚を追加」から追加してください。</span>`;
+        shelfContainer.innerHTML = isLocationsLoading
+          ? `<span class="text-xs text-slate-400">読み込み中...</span>`
+          : `<span class="text-xs text-slate-400">本棚が未登録です。「＋ この部屋に本棚を追加」から追加してください。</span>`;
       } else {
         shelfContainer.innerHTML = shelvesInRoom.map(shelf => {
           const active = shelf === currentShelf;
