@@ -1755,9 +1755,12 @@
       const clean = String(isbn || '').replace(/[^0-9]/g, '');
       if (!clean) return [];
       const isbn10 = isbn13ToIsbn10(clean);
-      const list = [
-        `https://ndlsearch.ndl.go.jp/thumbnail/${clean}.jpg`
-      ];
+      const list = [];
+      if (isbn10) {
+        list.push(`https://images-na.ssl-images-amazon.com/images/P/${isbn10}.09.LZZZZZZZ.jpg`);
+        list.push(`https://images-na.ssl-images-amazon.com/images/P/${isbn10}.09.MZZZZZZZ.jpg`);
+      }
+      list.push(`https://ndlsearch.ndl.go.jp/thumbnail/${clean}.jpg`);
       if (isbn10) {
         list.push(`https://ndlsearch.ndl.go.jp/thumbnail/${isbn10}.jpg`);
       }
