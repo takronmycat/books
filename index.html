@@ -34,6 +34,17 @@
       }
     }
   </script>
+  <style>
+    /* iPad Safari でカメラ映像が枠いっぱいに鮮明表示されるよう調整 */
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+    }
+    #reader__scan_region {
+      min-height: 100% !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900 pb-10">
 
@@ -169,7 +180,7 @@
               </svg>
             </div>
             <p class="text-sm font-semibold mb-1">カメラは停止中です</p>
-            <p class="text-xs text-slate-400 max-w-sm">iPadでは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。送信中でも次の本を連続でかざせます。</p>
+            <p class="text-xs text-slate-400 max-w-sm">iPadやスマホは本から<strong>15〜20cm離す</strong>とピントが合いやすくなります。PCのWebカメラでも利用でき、送信中でも次の本を連続でかざせます。</p>
           </div>
 
           <!-- リアルタイム読取ガイド（下段192バーコード検知時など） -->
@@ -523,46 +534,6 @@
   ====================================================================== -->
   <script>
     /**
-     * 【重要】単独GAS 2本のウェブアプリURL（一般Googleアカウントデプロイ版を設定済み）
-     */
-    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec";
-    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec";
-
-    // URLパラメータ (?reg=...&search=...) からの上書きにも対応
-    const urlParams = new URLSearchParams(window.location.search);
-    let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
-    let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
-
-    // 部屋・本棚マスタ（GAS連携後はLocationsシートと同期）
-    let locationMaster = [];
-
-    let currentRoom = "";
-    let currentShelf = "";
-
-    // アプリ全体の蔵書データ＆セッション履歴
-    let allBooks = [];
-    let sessionScannedBooks = [];
-
-    // 探索画面のフィルタ・表示状態
-    let activeRoomFilter = 'ALL';
-    let activeShelfFilter = 'ALL';
-    let isGridView = true;
-    let selectedBookForModal = null;
-
-    // スキャナー・連続読取キュー状態管理
-    let html5QrCode = null;
-    let isScannerRunning = false;
-    let scanQueue = [];
-    let isQueueWorkerRunning = false;
-    let lastScannedIsbn = "";
-    let lastScannedTime = 0;
-    const SCAN_COOLDOWN_MS = 2800;
-    let liveHintTimer = null;
-
-    // 重複スキャン確認モーダル用の一時保持データ
-    let pendingDuplicateData = null;
-
-    /**
      * 明示的にカメラ使用許可をブラウザへ要求する
      */
     async function requestCameraPermission() {
@@ -576,12 +547,22 @@
 
       try {
         if (label) label.textContent = 'カメラの許可を確認中...';
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false
-        });
+        let stream = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+          });
+        } catch (firstErr) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
         // 許可確認のみが目的なので取得したストリームはすぐ停止して解放する
-        stream.getTracks().forEach(track => track.stop());
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
 
         if (label) label.textContent = 'カメラの使用は許可されています（再確認可能）';
         if (btn) {
@@ -678,30 +659,119 @@
 
     /**
      * =====================================================================
-     * 画面タブ切り替え ＆ 通知・効果音
+     * カメラバーコードリーダー制御（iPadOS・PC Webカメラ両対応版）
      * =====================================================================
      */
-    function switchTab(tabName) {
-      const viewScan = document.getElementById('view-scan');
-      const viewSearch = document.getElementById('view-search');
-      const navScan = document.getElementById('nav-scan');
-      const navSearch = document.getElementById('nav-search');
+    async function startScanner() {
+      if (isScannerRunning) return;
 
-      if (tabName === 'scan') {
-        viewScan.classList.remove('hidden');
-        viewSearch.classList.add('hidden');
-        navScan.className = 'py-2 px-4 rounded-lg bg-blue-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-blue-600/30 transition whitespace-nowrap';
-        navSearch.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
-      } else {
-        if (isScannerRunning) {
-          stopScanner();
+      const placeholder = document.getElementById('camera-placeholder');
+      const btnStart = document.getElementById('btn-start-camera');
+      const btnStop = document.getElementById('btn-stop-camera');
+
+      try {
+        if (html5QrCode) {
+          try {
+            await html5QrCode.clear();
+          } catch (e) {}
+          html5QrCode = null;
         }
-        viewScan.classList.add('hidden');
-        viewSearch.classList.remove('hidden');
-        navSearch.className = 'py-2 px-4 rounded-lg bg-teal-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-teal-700/30 transition whitespace-nowrap';
-        navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
-        renderSearchFilterChips();
-        renderBooksGrid();
+
+        const readerEl = document.getElementById('reader');
+        if (readerEl) {
+          readerEl.innerHTML = '';
+        }
+
+        const scannerOpts = { verbose: false };
+        if (typeof Html5QrcodeSupportedFormats !== 'undefined' && Html5QrcodeSupportedFormats.EAN_13) {
+          scannerOpts.formatsToSupport = [Html5QrcodeSupportedFormats.EAN_13];
+        }
+        scannerOpts.experimentalFeatures = {
+          useBarCodeDetectorIfSupported: true
+        };
+
+        html5QrCode = new Html5Qrcode("reader", scannerOpts);
+
+        const config = {
+          fps: 15,
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            const boxWidth = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
+            const boxHeight = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
+            return { width: Math.max(boxWidth, 240), height: Math.max(boxHeight, 95) };
+          },
+          aspectRatio: 1.777778
+        };
+
+        const cameraTargets = [
+          { facingMode: { ideal: "environment" } },
+          "environment",
+          { facingMode: "user" },
+          "user"
+        ];
+
+        try {
+          if (typeof Html5Qrcode.getCameras === 'function') {
+            const cameras = await Html5Qrcode.getCameras();
+            if (Array.isArray(cameras) && cameras.length > 0) {
+              const backCam = cameras.find(c => /back|rear|environment|背面/i.test(c.label || ''));
+              cameraTargets.splice(2, 0, (backCam || cameras[0]).id);
+              if (cameras.length > 1) {
+                cameraTargets.splice(3, 0, cameras[1].id);
+              }
+            }
+          }
+        } catch (camEnumErr) {}
+
+        let started = false;
+        let lastStartError = null;
+        for (const target of cameraTargets) {
+          try {
+            await html5QrCode.start(
+              target,
+              config,
+              onScanSuccess,
+              () => {}
+            );
+            started = true;
+            break;
+          } catch (attemptErr) {
+            lastStartError = attemptErr;
+          }
+        }
+
+        if (!started) {
+          throw lastStartError || new Error('カメラを起動できませんでした');
+        }
+
+        isScannerRunning = true;
+        placeholder.classList.add('hidden');
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+
+        // iPad背面カメラでズーム対応していればスライダーを表示し初期1.5xに設定
+        try {
+          const capabilities = html5QrCode.getRunningTrackCapabilities();
+          if (capabilities && capabilities.zoom) {
+            const zoomBar = document.getElementById('zoom-control-bar');
+            const slider = document.getElementById('camera-zoom-slider');
+            const minZ = capabilities.zoom.min || 1;
+            const maxZ = Math.min(capabilities.zoom.max || 3, 4);
+            const initZ = Math.min(Math.max(1.5, minZ), maxZ);
+            slider.min = minZ;
+            slider.max = maxZ;
+            slider.value = initZ;
+            zoomBar.classList.remove('hidden');
+            await handleZoomChange(initZ);
+          }
+        } catch (zoomErr) {}
+
+      } catch (err) {
+        console.error('Camera start error:', err);
+        isScannerRunning = false;
+        placeholder.classList.remove('hidden');
+        btnStart.classList.remove('hidden');
+        btnStop.classList.add('hidden');
+        showToast('カメラを起動できませんでした。カメラの許可を確認するか「写真から読取」をお使いください', 'error');
       }
     }
 
