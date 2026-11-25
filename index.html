@@ -65,20 +65,8 @@
             <h1 class="font-bold text-base sm:text-lg leading-tight text-slate-900">Hondana Scan</h1>
             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">教員蔵書</span>
           </div>
-          <div class="flex items-center gap-1.5 mt-0.5">
-            <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500"></span>
-            <span id="connection-label" class="text-[11px] font-medium text-slate-500">読み込み中...</span>
-          </div>
         </div>
       </div>
-
-      <button onclick="openSettingsModal()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 flex items-center gap-1.5 text-xs font-semibold">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        <span>API設定</span>
-      </button>
     </div>
   </header>
 
@@ -452,11 +440,13 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <span class="text-[10px] text-slate-400 font-bold">部屋名</span>
-            <input type="text" id="modal-new-room" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <select id="modal-new-room" onchange="handleModalRoomChange()"
+              class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
           </div>
           <div>
             <span class="text-[10px] text-slate-400 font-bold">本棚名</span>
-            <input type="text" id="modal-new-shelf" class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <select id="modal-new-shelf"
+              class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
           </div>
         </div>
         <div>
@@ -594,29 +584,10 @@
      * =====================================================================
      */
     window.addEventListener('DOMContentLoaded', () => {
-      updateConnectionBadge();
       renderRoomAndShelfSelectors();
       renderSearchFilterChips();
       fetchAllBooks(false);
     });
-
-    function updateConnectionBadge() {
-      const dot = document.getElementById('connection-dot');
-      const label = document.getElementById('connection-label');
-      const hasReg = registerGasUrl && registerGasUrl.startsWith('http');
-      const hasSch = searchGasUrl && searchGasUrl.startsWith('http');
-
-      if (hasReg && hasSch) {
-        dot.className = 'w-2 h-2 rounded-full bg-emerald-500';
-        label.textContent = '登録GAS・検索GAS 両方連携中';
-      } else if (hasReg || hasSch) {
-        dot.className = 'w-2 h-2 rounded-full bg-sky-500';
-        label.textContent = 'GAS連携中（片側URL使用）';
-      } else {
-        dot.className = 'w-2 h-2 rounded-full bg-amber-500';
-        label.textContent = 'デモモード（GAS未接続）';
-      }
-    }
 
     /**
      * スプレッドシートから全蔵書データと部屋・本棚マスタを取得
@@ -659,24 +630,7 @@
             showToast(`最新データを読み込みました（全${allBooks.length}冊）`, 'success');
           }
         } else {
-          // 未接続時のデモデータ
-          if (allBooks.length === 0) {
-            allBooks = [
-              {
-                id: 'demo1',
-                timestamp: '2026/11/25 10:00:00',
-                isbn: '9784798142470',
-                room: '職員室',
-                shelf: '共通・教務キャビネット',
-                copyNumber: 1,
-                title: 'サンプル書籍（API設定からGASを連携してください）',
-                author: '教員蔵書システム',
-                publisher: 'サンプル出版',
-                coverUrl: '',
-                note: ''
-              }
-            ];
-          }
+          allBooks = [];
           renderSearchFilterChips();
           renderBooksGrid();
         }
@@ -1186,17 +1140,7 @@
 
               onBookRegisteredSuccess(result.book, task.tempId);
             } else {
-              const existingLocal = allBooks.filter(b => b.isbn === task.isbn);
-              if (existingLocal.length > 0 && !task.forceDuplicate) {
-                sessionScannedBooks = sessionScannedBooks.filter(b => b.id !== task.tempId);
-                renderSessionHistory();
-                playFeedbackSound('duplicate');
-                openDuplicateAlertModal(task.isbn, existingLocal, existingLocal.length + 1, task.room, task.shelf);
-                break;
-              }
-
-              const demoBook = await fetchBookDemoFallback(task.isbn, task.room, task.shelf, existingLocal.length + 1);
-              onBookRegisteredSuccess(demoBook, task.tempId);
+              throw new Error('登録用GASのURLが設定されていません');
             }
           } catch (err) {
             console.error('Register error:', err);
@@ -1215,40 +1159,6 @@
         isQueueWorkerRunning = false;
         updateQueueStatusBadge();
       }
-    }
-
-    async function fetchBookDemoFallback(isbn, room, shelf, copyNumber) {
-      let title = `デモ登録本 (ISBN: ${isbn})`;
-      let author = '著者情報';
-      let publisher = '';
-      let coverUrl = '';
-      try {
-        const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`);
-        const json = await res.json();
-        if (json && json[0] && json[0].summary) {
-          title = json[0].summary.title || title;
-          author = json[0].summary.author || author;
-          publisher = json[0].summary.publisher || '';
-          coverUrl = json[0].summary.cover || '';
-        }
-      } catch (e) {}
-
-      const now = new Date();
-      const timestamp = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-
-      return {
-        id: 'demo-' + Date.now(),
-        timestamp,
-        isbn,
-        room,
-        shelf,
-        copyNumber,
-        title,
-        author,
-        publisher,
-        coverUrl,
-        note: ''
-      };
     }
 
     function onBookRegisteredSuccess(book, tempId = null) {
@@ -1576,6 +1486,46 @@
      * 書籍詳細モーダル（タイトル・著者・部屋・本棚の移動、メモ更新、削除）
      * =====================================================================
      */
+    function populateModalLocationSelects(selectedRoom, selectedShelf) {
+      const roomSelect = document.getElementById('modal-new-room');
+      const shelfSelect = document.getElementById('modal-new-shelf');
+      if (!roomSelect || !shelfSelect) return;
+
+      const rooms = [...new Set([
+        ...locationMaster.map(l => l.room),
+        ...allBooks.map(b => b.room).filter(Boolean),
+        selectedRoom
+      ].filter(Boolean))];
+
+      roomSelect.innerHTML = rooms.map(r =>
+        `<option value="${escapeHtml(r)}" ${r === selectedRoom ? 'selected' : ''}>${escapeHtml(r)}</option>`
+      ).join('');
+
+      const activeRoom = roomSelect.value || selectedRoom || '';
+      updateModalShelfOptions(activeRoom, selectedShelf);
+    }
+
+    function updateModalShelfOptions(roomName, preferredShelf = '') {
+      const shelfSelect = document.getElementById('modal-new-shelf');
+      if (!shelfSelect) return;
+
+      const shelves = [...new Set([
+        ...locationMaster.filter(l => l.room === roomName).map(l => l.shelf),
+        ...allBooks.filter(b => b.room === roomName).map(b => b.shelf).filter(Boolean),
+        preferredShelf
+      ].filter(Boolean))];
+
+      shelfSelect.innerHTML = shelves.map(s =>
+        `<option value="${escapeHtml(s)}" ${s === preferredShelf ? 'selected' : ''}>${escapeHtml(s)}</option>`
+      ).join('');
+    }
+
+    function handleModalRoomChange() {
+      const roomSelect = document.getElementById('modal-new-room');
+      if (!roomSelect) return;
+      updateModalShelfOptions(roomSelect.value, '');
+    }
+
     function openBookDetailModal(bookId) {
       const book = allBooks.find(b => b.id === bookId) || sessionScannedBooks.find(b => b.id === bookId);
       if (!book) return;
@@ -1607,8 +1557,7 @@
       const isUnregisteredTitle = !book.title || /^タイトル未登録/.test(book.title);
       document.getElementById('modal-new-title').value = isUnregisteredTitle ? '' : book.title;
       document.getElementById('modal-new-author').value = book.author || '';
-      document.getElementById('modal-new-room').value = book.room;
-      document.getElementById('modal-new-shelf').value = book.shelf;
+      populateModalLocationSelects(book.room, book.shelf);
       document.getElementById('modal-new-note').value = book.note || '';
 
       hideDeleteConfirm();
@@ -1729,55 +1678,6 @@
       } catch (err) {
         showToast(`削除に失敗しました: ${err.message}`, 'error');
       }
-    }
-
-    /**
-     * =====================================================================
-     * 単独GAS 2本の連携設定モーダル制御
-     * =====================================================================
-     */
-    function openSettingsModal() {
-      document.getElementById('register-gas-url-input').value = registerGasUrl;
-      document.getElementById('search-gas-url-input').value = searchGasUrl;
-      document.getElementById('settings-modal').classList.remove('hidden');
-    }
-
-    function closeSettingsModal() {
-      document.getElementById('settings-modal').classList.add('hidden');
-    }
-
-    async function saveGasUrlSettings() {
-      registerGasUrl = document.getElementById('register-gas-url-input').value.trim();
-      searchGasUrl   = document.getElementById('search-gas-url-input').value.trim();
-      updateConnectionBadge();
-      closeSettingsModal();
-      await fetchAllBooks(true);
-    }
-
-    async function testGasConnections() {
-      const regUrl = document.getElementById('register-gas-url-input').value.trim();
-      const schUrl = document.getElementById('search-gas-url-input').value.trim();
-      const box = document.getElementById('gas-test-result');
-      box.className = 'rounded-xl p-3 text-xs font-medium bg-slate-100 text-slate-700';
-      box.textContent = '接続テスト中...';
-      box.classList.remove('hidden');
-
-      const results = [];
-      for (const [label, url] of [['①登録GAS', regUrl], ['②検索GAS', schUrl]]) {
-        if (!url) {
-          results.push(`${label}: 未入力`);
-          continue;
-        }
-        try {
-          const res = await fetch(url);
-          const json = await res.json();
-          results.push(json.status === 'success' ? `${label}: ✅ 正常接続OK` : `${label}: ⚠️ 応答あり(${json.message})`);
-        } catch (e) {
-          results.push(`${label}: ❌ ブロック(Load failed) → GASのアクセス権を「全員」にしてください`);
-        }
-      }
-      box.className = 'rounded-xl p-3 text-xs font-bold bg-slate-800 text-white space-y-1';
-      box.innerHTML = results.map(r => `<div>${escapeHtml(r)}</div>`).join('');
     }
 
     function isbn13ToIsbn10(isbn13) {
