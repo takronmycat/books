@@ -28,7 +28,8 @@
               500: '#6366f1',
               600: '#4f46e5',
               700: '#4338ca',
-            900: '#312e81',
+              900: '#312e81',
+            }
           }
         }
       }
@@ -67,14 +68,14 @@
       </div>
 
       <!-- ヘッダー内タブ切り替えボタン -->
-      <nav aria-label="画面切り替え" class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:w-auto border border-slate-200">
-        <button id="nav-scan" onclick="switchTab('scan')" class="py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap">
+      <nav aria-label="画面切り替え" class="grid grid-cols-2 gap-1.5 bg-slate-200/80 p-1 rounded-xl w-full sm:w-auto border border-slate-300">
+        <button id="nav-scan" onclick="switchTab('scan')" class="py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-400 transition whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
           </svg>
           <span>とうろく</span>
         </button>
-        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
+        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-transparent hover:bg-slate-300/70 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
@@ -533,6 +534,69 @@
        アプリケーション制御スクリプト
   ====================================================================== -->
   <script>
+    const DEFAULT_REGISTER_GAS_URL = "https://script.google.com/macros/s/AKfycby3yzUWvvJRdublkGfzrJqHHGZqyHPSD2QnTbquJNI5keE6XzKYG5ZY9KP1jxXZrsk/exec";
+    const DEFAULT_SEARCH_GAS_URL   = "https://script.google.com/macros/s/AKfycbyVyEmpdJ_-OxPkI_nq5PD9KFp602kbLNEcpXptqgV3-9lZemAL07X36AkFcPeTZGqxwA/exec";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let registerGasUrl = urlParams.get('reg') || DEFAULT_REGISTER_GAS_URL;
+    let searchGasUrl   = urlParams.get('search') || DEFAULT_SEARCH_GAS_URL;
+
+    let locationMaster = [
+      { room: "職員室", shelf: "共通・教務キャビネット" },
+      { room: "職員室", shelf: "窓際スチール棚A" },
+      { room: "理科準備室", shelf: "指導書・資料棚" },
+      { room: "社会科準備室", shelf: "地図・資料集ラック" },
+      { room: "進路指導室", shelf: "赤本・大学案内棚" }
+    ];
+
+    let currentRoom = "職員室";
+    let currentShelf = "共通・教務キャビネット";
+
+    let allBooks = [];
+    let sessionScannedBooks = [];
+
+    let activeRoomFilter = 'ALL';
+    let activeShelfFilter = 'ALL';
+    let isGridView = true;
+    let selectedBookForModal = null;
+
+    let html5QrCode = null;
+    let isScannerRunning = false;
+    let scanQueue = [];
+    let isQueueWorkerRunning = false;
+    let lastScannedIsbn = "";
+    let lastScannedTime = 0;
+    const SCAN_COOLDOWN_MS = 2800;
+    let liveHintTimer = null;
+    let pendingDuplicateData = null;
+
+    /**
+     * 画面タブ（とうろく / 本をさがす）を切り替える
+     */
+    function switchTab(tabName) {
+      const viewScan = document.getElementById('view-scan');
+      const viewSearch = document.getElementById('view-search');
+      const navScan = document.getElementById('nav-scan');
+      const navSearch = document.getElementById('nav-search');
+
+      if (tabName === 'scan') {
+        viewScan.classList.remove('hidden');
+        viewSearch.classList.add('hidden');
+        navScan.className = 'py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+      } else {
+        if (isScannerRunning) {
+          stopScanner();
+        }
+        viewScan.classList.add('hidden');
+        viewSearch.classList.remove('hidden');
+        navSearch.className = 'py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap';
+        navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+        renderSearchFilterChips();
+        renderBooksGrid();
+      }
+    }
+
     /**
      * 明示的にカメラ使用許可をブラウザへ要求する
      */
@@ -657,123 +721,7 @@
       }
     }
 
-    /**
-     * =====================================================================
-     * カメラバーコードリーダー制御（iPadOS・PC Webカメラ両対応版）
-     * =====================================================================
-     */
-    async function startScanner() {
-      if (isScannerRunning) return;
-
-      const placeholder = document.getElementById('camera-placeholder');
-      const btnStart = document.getElementById('btn-start-camera');
-      const btnStop = document.getElementById('btn-stop-camera');
-
-      try {
-        if (html5QrCode) {
-          try {
-            await html5QrCode.clear();
-          } catch (e) {}
-          html5QrCode = null;
-        }
-
-        const readerEl = document.getElementById('reader');
-        if (readerEl) {
-          readerEl.innerHTML = '';
-        }
-
-        const scannerOpts = { verbose: false };
-        if (typeof Html5QrcodeSupportedFormats !== 'undefined' && Html5QrcodeSupportedFormats.EAN_13) {
-          scannerOpts.formatsToSupport = [Html5QrcodeSupportedFormats.EAN_13];
-        }
-        scannerOpts.experimentalFeatures = {
-          useBarCodeDetectorIfSupported: true
-        };
-
-        html5QrCode = new Html5Qrcode("reader", scannerOpts);
-
-        const config = {
-          fps: 15,
-          qrbox: function(viewfinderWidth, viewfinderHeight) {
-            const boxWidth = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
-            const boxHeight = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
-            return { width: Math.max(boxWidth, 240), height: Math.max(boxHeight, 95) };
-          },
-          aspectRatio: 1.777778
-        };
-
-        const cameraTargets = [
-          { facingMode: { ideal: "environment" } },
-          "environment",
-          { facingMode: "user" },
-          "user"
-        ];
-
-        try {
-          if (typeof Html5Qrcode.getCameras === 'function') {
-            const cameras = await Html5Qrcode.getCameras();
-            if (Array.isArray(cameras) && cameras.length > 0) {
-              const backCam = cameras.find(c => /back|rear|environment|背面/i.test(c.label || ''));
-              cameraTargets.splice(2, 0, (backCam || cameras[0]).id);
-              if (cameras.length > 1) {
-                cameraTargets.splice(3, 0, cameras[1].id);
-              }
-            }
-          }
-        } catch (camEnumErr) {}
-
-        let started = false;
-        let lastStartError = null;
-        for (const target of cameraTargets) {
-          try {
-            await html5QrCode.start(
-              target,
-              config,
-              onScanSuccess,
-              () => {}
-            );
-            started = true;
-            break;
-          } catch (attemptErr) {
-            lastStartError = attemptErr;
-          }
-        }
-
-        if (!started) {
-          throw lastStartError || new Error('カメラを起動できませんでした');
-        }
-
-        isScannerRunning = true;
-        placeholder.classList.add('hidden');
-        btnStart.classList.add('hidden');
-        btnStop.classList.remove('hidden');
-
-        // iPad背面カメラでズーム対応していればスライダーを表示し初期1.5xに設定
-        try {
-          const capabilities = html5QrCode.getRunningTrackCapabilities();
-          if (capabilities && capabilities.zoom) {
-            const zoomBar = document.getElementById('zoom-control-bar');
-            const slider = document.getElementById('camera-zoom-slider');
-            const minZ = capabilities.zoom.min || 1;
-            const maxZ = Math.min(capabilities.zoom.max || 3, 4);
-            const initZ = Math.min(Math.max(1.5, minZ), maxZ);
-            slider.min = minZ;
-            slider.max = maxZ;
-            slider.value = initZ;
-            zoomBar.classList.remove('hidden');
-            await handleZoomChange(initZ);
-          }
-        } catch (zoomErr) {}
-
-      } catch (err) {
-        console.error('Camera start error:', err);
-        isScannerRunning = false;
-        placeholder.classList.remove('hidden');
-        btnStart.classList.remove('hidden');
-        btnStop.classList.add('hidden');
-        showToast('カメラを起動できませんでした。カメラの許可を確認するか「写真から読取」をお使いください', 'error');
-      }
-    }
+    // showToast や部屋・本棚セレクター制御はそのまま維持
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
@@ -846,8 +794,8 @@
             <button onclick='selectRoom(${JSON.stringify(room)})'
               class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
                 active
-                  ? 'bg-brand-600 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  ? 'bg-brand-700 text-white shadow-md ring-2 ring-brand-400 scale-[1.02]'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
               }">
               🚪 ${escapeHtml(room)}
             </button>
@@ -874,8 +822,8 @@
             <button onclick='selectShelf(${JSON.stringify(shelf)})'
               class="px-3.5 py-2 rounded-xl text-xs font-bold transition ${
                 active
-                  ? 'bg-teal-700 text-white shadow-xs'
-                  : 'bg-teal-50 text-teal-900 border border-teal-200/80 hover:bg-teal-100'
+                  ? 'bg-teal-800 text-white shadow-md ring-2 ring-teal-400 scale-[1.02]'
+                  : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'
               }">
               🗄️ ${escapeHtml(shelf)}
             </button>
@@ -973,9 +921,24 @@
 
     /**
      * =====================================================================
-     * カメラバーコードリーダー制御（iPadOS 最適化版）
+     * カメラバーコードリーダー制御（iPadOS・PCカメラ対応）
      * =====================================================================
      */
+    function createScannerInstance() {
+      const readerEl = document.getElementById('reader');
+      if (readerEl) {
+        readerEl.innerHTML = '';
+      }
+      html5QrCode = new Html5Qrcode("reader", {
+        formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        },
+        verbose: false
+      });
+      return html5QrCode;
+    }
+
     async function startScanner() {
       if (isScannerRunning) return;
 
@@ -983,65 +946,111 @@
       const btnStart = document.getElementById('btn-start-camera');
       const btnStop = document.getElementById('btn-stop-camera');
 
+      const safeQrBox = function(viewfinderWidth, viewfinderHeight) {
+        const maxW = Math.max(50, viewfinderWidth - 16);
+        const maxH = Math.max(50, viewfinderHeight - 16);
+        const targetW = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
+        const targetH = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
+        return {
+          width: Math.min(Math.max(targetW, 200), maxW),
+          height: Math.min(Math.max(targetH, 80), maxH)
+        };
+      };
+
+      const primaryConfig = {
+        fps: 15,
+        qrbox: safeQrBox,
+        aspectRatio: 1.777778,
+        videoConstraints: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      };
+
+      const simpleConfig = {
+        fps: 15,
+        qrbox: safeQrBox
+      };
+
+      let lastErr = null;
+      let started = false;
+
+      // 試行候補リストを順番に試す（失敗時はインスタンスを作り直す）
+      const attempts = [
+        { target: { facingMode: "environment" }, cfg: primaryConfig }
+      ];
+
+      // 利用可能なカメラIDを取得できた場合はフォールバック候補に追加
       try {
-        if (!html5QrCode) {
-          html5QrCode = new Html5Qrcode("reader", {
-            formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
-            experimentalFeatures: {
-              useBarCodeDetectorIfSupported: true
-            },
-            verbose: false
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras && cameras.length > 0) {
+          const backCam = cameras.find(c => /back|rear|environment|背面/i.test(c.label || ''));
+          if (backCam) {
+            attempts.push({ target: backCam.id, cfg: simpleConfig });
+          }
+          cameras.forEach(c => {
+            if (!backCam || c.id !== backCam.id) {
+              attempts.push({ target: c.id, cfg: simpleConfig });
+            }
           });
         }
-
-        const config = {
-          fps: 15,
-          qrbox: function(viewfinderWidth, viewfinderHeight) {
-            const boxWidth = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
-            const boxHeight = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
-            return { width: Math.max(boxWidth, 240), height: Math.max(boxHeight, 95) };
-          },
-          aspectRatio: 1.777778,
-          videoConstraints: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }
-        };
-
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          config,
-          onScanSuccess,
-          () => {}
-        );
-
-        isScannerRunning = true;
-        placeholder.classList.add('hidden');
-        btnStart.classList.add('hidden');
-        btnStop.classList.remove('hidden');
-
-        // iPad背面カメラでズーム対応していればスライダーを表示し初期1.5xに設定
-        try {
-          const capabilities = html5QrCode.getRunningTrackCapabilities();
-          if (capabilities && capabilities.zoom) {
-            const zoomBar = document.getElementById('zoom-control-bar');
-            const slider = document.getElementById('camera-zoom-slider');
-            const minZ = capabilities.zoom.min || 1;
-            const maxZ = Math.min(capabilities.zoom.max || 3, 4);
-            const initZ = Math.min(Math.max(1.5, minZ), maxZ);
-            slider.min = minZ;
-            slider.max = maxZ;
-            slider.value = initZ;
-            zoomBar.classList.remove('hidden');
-            await handleZoomChange(initZ);
-          }
-        } catch (zoomErr) {}
-
-      } catch (err) {
-        console.error('Camera start error:', err);
-        showToast('カメラを起動できませんでした。Safariのカメラ許可を確認するか「写真から読取」をお使いください', 'error');
+      } catch (camListErr) {
+        lastErr = camListErr;
       }
+
+      attempts.push({ target: { facingMode: "user" }, cfg: simpleConfig });
+
+      for (const attempt of attempts) {
+        try {
+          if (html5QrCode) {
+            try { await html5QrCode.stop(); } catch (e) {}
+            try { html5QrCode.clear(); } catch (e) {}
+          }
+          const scanner = createScannerInstance();
+          await scanner.start(
+            attempt.target,
+            attempt.cfg,
+            onScanSuccess,
+            () => {}
+          );
+          started = true;
+          break;
+        } catch (attemptErr) {
+          lastErr = attemptErr;
+          console.warn('Camera start attempt failed:', attempt.target, attemptErr);
+        }
+      }
+
+      if (!started) {
+        console.error('Camera start error:', lastErr);
+        isScannerRunning = false;
+        const errDetail = lastErr ? (lastErr.name || lastErr.message || String(lastErr)) : '不明なエラー';
+        showToast(`カメラを起動できませんでした（${errDetail}）。カメラ許可や他アプリの使用状況をご確認ください`, 'error');
+        return;
+      }
+
+      isScannerRunning = true;
+      placeholder.classList.add('hidden');
+      btnStart.classList.add('hidden');
+      btnStop.classList.remove('hidden');
+
+      // ズーム対応カメラであればスライダーを表示し初期1.5xに設定
+      try {
+        const capabilities = html5QrCode.getRunningTrackCapabilities();
+        if (capabilities && capabilities.zoom) {
+          const zoomBar = document.getElementById('zoom-control-bar');
+          const slider = document.getElementById('camera-zoom-slider');
+          const minZ = capabilities.zoom.min || 1;
+          const maxZ = Math.min(capabilities.zoom.max || 3, 4);
+          const initZ = Math.min(Math.max(1.5, minZ), maxZ);
+          slider.min = minZ;
+          slider.max = maxZ;
+          slider.value = initZ;
+          zoomBar.classList.remove('hidden');
+          await handleZoomChange(initZ);
+        }
+      } catch (zoomErr) {}
     }
 
     async function handleZoomChange(val) {
@@ -1474,9 +1483,9 @@
       ])];
 
       roomContainer.innerHTML = [
-        `<button onclick="setRoomFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === 'ALL' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">すべて</button>`,
+        `<button onclick="setRoomFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === 'ALL' ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-400' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}">すべて</button>`,
         ...rooms.map(r => `
-          <button onclick='setRoomFilter(${JSON.stringify(r)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === r ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+          <button onclick='setRoomFilter(${JSON.stringify(r)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeRoomFilter === r ? 'bg-brand-700 text-white shadow-sm ring-2 ring-brand-400' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}">
             🚪 ${escapeHtml(r)}
           </button>
         `)
@@ -1488,9 +1497,9 @@
       ])];
 
       shelfContainer.innerHTML = [
-        `<button onclick="setShelfFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === 'ALL' ? 'bg-teal-700 text-white' : 'bg-teal-50 text-teal-800 hover:bg-teal-100'}">すべての棚</button>`,
+        `<button onclick="setShelfFilter('ALL')" class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === 'ALL' ? 'bg-teal-800 text-white shadow-sm ring-2 ring-teal-400' : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'}">すべての棚</button>`,
         ...shelves.map(s => `
-          <button onclick='setShelfFilter(${JSON.stringify(s)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === s ? 'bg-teal-700 text-white' : 'bg-teal-50 text-teal-800 hover:bg-teal-100'}">
+          <button onclick='setShelfFilter(${JSON.stringify(s)})' class="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${activeShelfFilter === s ? 'bg-teal-800 text-white shadow-sm ring-2 ring-teal-400' : 'bg-teal-50 text-teal-900 border border-teal-200 hover:bg-teal-100'}">
             🗄️ ${escapeHtml(s)}
           </button>
         `)
