@@ -1736,6 +1736,11 @@
       box.className = 'rounded-xl p-3 text-xs font-bold bg-slate-800 text-white space-y-1';
       box.innerHTML = results.map(r => `<div>${escapeHtml(r)}</div>`).join('');
     }
+
+    function getSafeCoverUrl(coverUrl, isbn) {
+      if (coverUrl && coverUrl.startsWith('http')) {
+        return coverUrl.replace(/^http:\/\//i, 'https://');
+      }
       if (isbn) {
         return `https://cover.openbd.jp/${isbn}.jpg`;
       }
