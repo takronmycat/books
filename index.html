@@ -75,7 +75,7 @@
           </svg>
           <span>とうろく</span>
         </button>
-        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-transparent hover:bg-slate-300/70 text-slate-700 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
+        <button id="nav-search" onclick="switchTab('search')" class="py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
@@ -271,7 +271,7 @@
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
             今回スキャンした本（<span id="session-count">0</span>冊）
           </h2>
-          <button onclick="switchTab('search')" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+          <button onclick="switchTab('search')" class="text-xs font-bold text-rose-600 hover:text-rose-700">
             すべての蔵書を探す →
           </button>
         </div>
@@ -319,10 +319,15 @@
         </div>
 
         <!-- 件数表示と並び替え -->
-        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-          <span class="font-semibold text-slate-600">
-            該当: <span id="filtered-books-count" class="text-brand-600 font-bold text-sm">0</span> 冊
-          </span>
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-slate-600">
+              該当: <span id="filtered-books-count" class="text-rose-600 font-bold text-sm">0</span> 冊
+            </span>
+            <button onclick="selectAllFilteredBooks()" class="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition">
+              表示中を全チェック
+            </button>
+          </div>
           <div class="flex items-center gap-2">
             <select id="sort-select" onchange="renderBooksGrid()" class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none">
               <option value="newest">登録が新しい順</option>
@@ -343,133 +348,42 @@
       <div id="books-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
     </section>
 
+    <!-- 一括更新バー表示時の下部余白スペーサー -->
+    <div id="bulk-bar-spacer" class="hidden h-32"></div>
+
   </main>
 
   <!-- =====================================================================
-       モーダル1：同一ISBN 重複検知＆2冊目登録アラートモーダル
+       フローティングバー：チェックした本の一括場所更新（部屋・本棚）
   ====================================================================== -->
-  <div id="duplicate-alert-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4 border-t-4 border-amber-500">
-      <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-          </svg>
-        </div>
-        <div>
-          <span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-bold mb-1">
-            重複スキャン検知（すでに <span id="dup-existing-count">1</span> 冊登録済み）
+  <div id="bulk-update-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-brand-500 shadow-2xl px-4 py-3">
+    <div class="max-w-3xl mx-auto space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-brand-600 text-white text-xs font-bold">
+            ✓ <span id="bulk-selected-count" class="mx-0.5">0</span>冊 チェック中
           </span>
-          <h3 id="dup-book-title" class="font-bold text-base text-slate-900 leading-snug">書籍タイトル</h3>
-          <p id="dup-book-isbn" class="text-xs font-mono text-slate-500 mt-0.5">ISBN: 978...</p>
+          <span class="text-[11px] text-slate-500 hidden sm:inline">再スキャン不要で保管場所を一括変更できます</span>
         </div>
-      </div>
-
-      <!-- すでに登録されている本の場所一覧 -->
-      <div class="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-2">
-        <p class="text-xs font-bold text-amber-900">現在登録されている保管場所：</p>
-        <div id="dup-existing-list" class="space-y-2"></div>
-      </div>
-
-      <p class="text-xs text-slate-600 leading-relaxed">
-        同じ本を複数冊持っている場合（複本）は<strong>「<span id="dup-next-copy-num">2</span>冊目として追加登録」</strong>を押してください。二重スキャンしてしまった場合はキャンセルできます。
-      </p>
-
-      <!-- 3つのアクションボタン -->
-      <div class="space-y-2 pt-1">
-        <button onclick="confirmRegisterDuplicate()" class="w-full py-3.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs sm:text-sm shadow-sm transition">
-          📚 <span id="dup-btn-copy-label">2冊目（複本）</span>として「<span id="dup-target-loc"></span>」に追加登録する
-        </button>
-
-        <button id="btn-move-existing-instead" onclick="moveFirstExistingToCurrentLocation()" class="w-full py-3 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 font-bold text-xs transition">
-          📦 登録済みの1冊目を「<span id="dup-move-target-loc"></span>」へ場所移動する
-        </button>
-
-        <button onclick="closeDuplicateModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
-          登録せずキャンセル（二重読み取り）
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- =====================================================================
-       モーダル2：書籍詳細＆タイトル・著者・場所移動・メモ編集・削除モーダル
-  ====================================================================== -->
-  <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
-      <div class="flex justify-between items-start gap-4">
-        <div class="flex gap-4">
-          <img id="modal-book-cover" src="" alt="表紙" class="w-24 h-34 object-cover rounded-xl bg-slate-100 border border-slate-200 shrink-0 shadow-xs">
-          <div class="space-y-1.5">
-            <div class="flex flex-wrap items-center gap-1.5">
-              <span id="modal-book-location" class="inline-block px-2.5 py-1 rounded-lg bg-brand-100 text-brand-800 text-xs font-bold">
-                部屋 ＞ 本棚
-              </span>
-              <span id="modal-book-copy-badge" class="hidden inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[11px] font-bold">
-                2冊目
-              </span>
-            </div>
-            <h3 id="modal-book-title" class="font-bold text-base text-slate-900 leading-snug">タイトル</h3>
-            <p id="modal-book-author" class="text-xs text-slate-600">著者名</p>
-            <p id="modal-book-publisher" class="text-[11px] text-slate-400">出版社</p>
-          </div>
-        </div>
-        <button onclick="closeBookDetailModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
+        <button onclick="clearBookSelection()" class="text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition">
+          チェック解除
         </button>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1 border border-slate-200/70">
-        <div class="flex justify-between"><span class="text-slate-400">ISBN:</span><span id="modal-book-isbn" class="font-mono font-medium"></span></div>
-        <div class="flex justify-between"><span class="text-slate-400">登録日時:</span><span id="modal-book-timestamp"></span></div>
-      </div>
-
-      <!-- タイトル・著者・保管場所（部屋・本棚）の編集＆備考メモフォーム -->
-      <div class="pt-2 border-t border-slate-100 space-y-3">
-        <label class="block text-xs font-bold text-slate-700">タイトル・著者・保管場所・備考メモを編集</label>
-        <div>
-          <span class="text-[10px] text-slate-400 font-bold">書名（タイトル）</span>
-          <input type="text" id="modal-new-title" placeholder="書名を入力（未登録本の入力・修正も可能）"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+        <div class="sm:col-span-4">
+          <select id="bulk-target-room" onchange="handleBulkRoomChange()"
+            class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2.5 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
         </div>
-        <div>
-          <span class="text-[10px] text-slate-400 font-bold">著者名</span>
-          <input type="text" id="modal-new-author" placeholder="著者名を入力"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <div class="sm:col-span-4">
+          <select id="bulk-target-shelf"
+            class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2.5 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <span class="text-[10px] text-slate-400 font-bold">部屋名</span>
-            <select id="modal-new-room" onchange="handleModalRoomChange()"
-              class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
-          </div>
-          <div>
-            <span class="text-[10px] text-slate-400 font-bold">本棚名</span>
-            <select id="modal-new-shelf"
-              class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
-          </div>
-        </div>
-        <div>
-          <span class="text-[10px] text-slate-400 font-bold">備考メモ（担当者名・教科・貸出メモなど）</span>
-          <input type="text" id="modal-new-note" placeholder="例：〇〇先生私物、赤本2026年度版など"
-            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
-        </div>
-        <button onclick="updateBookDetails()" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
-          変更を保存する
-        </button>
-      </div>
-
-      <!-- 削除確認エリア -->
-      <div class="pt-2 flex justify-between items-center border-t border-slate-100">
-        <button id="btn-delete-step1" onclick="showDeleteConfirm()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 py-2 px-3 rounded-lg hover:bg-rose-50">
-          この本をリストから削除
-        </button>
-        <div id="delete-confirm-box" class="hidden flex items-center gap-2">
-          <span class="text-xs text-rose-600 font-bold">本当に削除しますか？</span>
-          <button onclick="executeDeleteBook()" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold">削除実行</button>
-          <button onclick="hideDeleteConfirm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">取消</button>
+        <div class="sm:col-span-4">
+          <button id="btn-execute-bulk-update" onclick="executeBulkLocationUpdate()"
+            class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs shadow-sm transition">
+            チェックした本を一括更新
+          </button>
         </div>
       </div>
     </div>
@@ -554,8 +468,8 @@
     let activeShelfFilter = 'ALL';
     let isGridView = true;
     let selectedBookForModal = null;
-
-    let html5QrCode = null;
+    let selectedBookIds = new Set();
+    let isBulkUpdating = false;
     let isScannerRunning = false;
     let scanQueue = [];
     let isQueueWorkerRunning = false;
@@ -577,15 +491,15 @@
       if (tabName === 'scan') {
         viewScan.classList.remove('hidden');
         viewSearch.classList.add('hidden');
-        navScan.className = 'py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap';
-        navSearch.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+        navScan.className = 'py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-400 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
       } else {
         if (isScannerRunning) {
           stopScanner();
         }
         viewScan.classList.add('hidden');
         viewSearch.classList.remove('hidden');
-        navSearch.className = 'py-2 px-4 rounded-lg bg-brand-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-600/30 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-rose-400 transition whitespace-nowrap';
         navScan.className = 'py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
         renderSearchFilterChips();
         renderBooksGrid();
@@ -1452,7 +1366,12 @@
 
         return `
           <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/80 transition cursor-pointer">
+            class="flex items-center gap-3 p-2.5 rounded-xl border transition cursor-pointer ${selectedBookIds.has(book.id) ? 'bg-brand-50/70 border-brand-400 ring-1 ring-brand-400' : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100/80'}">
+            <label onclick="event.stopPropagation()" class="shrink-0 flex items-center justify-center p-1 cursor-pointer">
+              <input type="checkbox" ${selectedBookIds.has(book.id) ? 'checked' : ''}
+                onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
+                class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+            </label>
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                  data-isbn="${escapeHtml(book.isbn)}"
                  data-step="0"
@@ -1565,10 +1484,17 @@
 
       if (isGridView) {
         container.className = 'grid grid-cols-2 sm:grid-cols-3 gap-3';
-        container.innerHTML = filtered.map(book => `
+        container.innerHTML = filtered.map(book => {
+          const isChecked = selectedBookIds.has(book.id);
+          return `
           <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.98] transition cursor-pointer flex flex-col">
+            class="bg-white rounded-2xl overflow-hidden border transition cursor-pointer flex flex-col ${isChecked ? 'border-brand-500 ring-2 ring-brand-400 shadow-md' : 'border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.98]'}">
             <div class="relative aspect-[3/4] bg-slate-100 overflow-hidden">
+              <label onclick="event.stopPropagation()" class="absolute top-2 left-2 z-10 w-7 h-7 rounded-lg bg-white/95 shadow-sm border border-slate-300 flex items-center justify-center cursor-pointer">
+                <input type="checkbox" ${isChecked ? 'checked' : ''}
+                  onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
+                  class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+              </label>
               <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                    data-isbn="${escapeHtml(book.isbn)}"
                    data-step="0"
@@ -1595,12 +1521,20 @@
               </p>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
       } else {
         container.className = 'space-y-2.5';
-        container.innerHTML = filtered.map(book => `
+        container.innerHTML = filtered.map(book => {
+          const isChecked = selectedBookIds.has(book.id);
+          return `
           <div onclick='openBookDetailModal(${JSON.stringify(book.id)})'
-            class="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.99] transition cursor-pointer flex items-center gap-3.5">
+            class="bg-white rounded-2xl p-3 border transition cursor-pointer flex items-center gap-3 ${isChecked ? 'border-brand-500 ring-2 ring-brand-400 bg-brand-50/40 shadow-md' : 'border-slate-200/80 shadow-xs hover:shadow-md active:scale-[0.99]'}">
+            <label onclick="event.stopPropagation()" class="shrink-0 flex items-center justify-center p-1 cursor-pointer">
+              <input type="checkbox" ${isChecked ? 'checked' : ''}
+                onchange='toggleBookSelection(${JSON.stringify(book.id)}, event)'
+                class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+            </label>
             <img src="${getSafeCoverUrl(book.coverUrl, book.isbn)}"
                  data-isbn="${escapeHtml(book.isbn)}"
                  data-step="0"
@@ -1619,7 +1553,191 @@
               <p class="text-xs text-slate-500 truncate">${escapeHtml(book.author || '著者不明')}</p>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
+      }
+    }
+
+    /**
+     * =====================================================================
+     * チェック選択による保管場所（部屋・本棚）の一括更新処理
+     * =====================================================================
+     */
+    function toggleBookSelection(bookId, event) {
+      if (event) event.stopPropagation();
+      if (selectedBookIds.has(bookId)) {
+        selectedBookIds.delete(bookId);
+      } else {
+        selectedBookIds.add(bookId);
+      }
+      updateBulkUpdateBar();
+      renderSessionHistory();
+      renderBooksGrid();
+    }
+
+    function selectAllFilteredBooks() {
+      const query = document.getElementById('search-query-input').value.trim().toLowerCase();
+      const filtered = allBooks.filter(book => {
+        if (activeRoomFilter !== 'ALL' && book.room !== activeRoomFilter) return false;
+        if (activeShelfFilter !== 'ALL' && book.shelf !== activeShelfFilter) return false;
+        if (!query) return true;
+        const target = `${book.title} ${book.author} ${book.publisher} ${book.isbn} ${book.room} ${book.shelf} ${book.note || ''}`.toLowerCase();
+        return target.includes(query);
+      });
+
+      if (filtered.length === 0) return;
+      filtered.forEach(b => selectedBookIds.add(b.id));
+      updateBulkUpdateBar();
+      renderSessionHistory();
+      renderBooksGrid();
+    }
+
+    function clearBookSelection() {
+      selectedBookIds.clear();
+      updateBulkUpdateBar();
+      renderSessionHistory();
+      renderBooksGrid();
+    }
+
+    function updateBulkUpdateBar() {
+      const bar = document.getElementById('bulk-update-bar');
+      const spacer = document.getElementById('bulk-bar-spacer');
+      const countEl = document.getElementById('bulk-selected-count');
+      if (!bar || !spacer || !countEl) return;
+
+      const count = selectedBookIds.size;
+      countEl.textContent = count;
+
+      if (count === 0) {
+        bar.classList.add('hidden');
+        spacer.classList.add('hidden');
+        return;
+      }
+
+      populateBulkLocationSelects();
+      bar.classList.remove('hidden');
+      spacer.classList.remove('hidden');
+    }
+
+    function populateBulkLocationSelects() {
+      const roomSelect = document.getElementById('bulk-target-room');
+      const shelfSelect = document.getElementById('bulk-target-shelf');
+      if (!roomSelect || !shelfSelect) return;
+
+      const prevRoom = roomSelect.value;
+      const rooms = [...new Set([
+        ...locationMaster.map(l => l.room),
+        ...allBooks.map(b => b.room).filter(Boolean)
+      ].filter(Boolean))];
+
+      const selectedRoom = rooms.includes(prevRoom) ? prevRoom : (currentRoom || rooms[0] || '');
+      roomSelect.innerHTML = rooms.map(r =>
+        `<option value="${escapeHtml(r)}" ${r === selectedRoom ? 'selected' : ''}>🚪 ${escapeHtml(r)}</option>`
+      ).join('');
+
+      updateBulkShelfOptions(selectedRoom, shelfSelect.value);
+    }
+
+    function updateBulkShelfOptions(roomName, preferredShelf = '') {
+      const shelfSelect = document.getElementById('bulk-target-shelf');
+      if (!shelfSelect) return;
+
+      const shelves = [...new Set([
+        ...locationMaster.filter(l => l.room === roomName).map(l => l.shelf),
+        ...allBooks.filter(b => b.room === roomName).map(b => b.shelf).filter(Boolean)
+      ].filter(Boolean))];
+
+      const selectedShelf = shelves.includes(preferredShelf) ? preferredShelf : (shelves[0] || '');
+      shelfSelect.innerHTML = shelves.map(s =>
+        `<option value="${escapeHtml(s)}" ${s === selectedShelf ? 'selected' : ''}>🗄️ ${escapeHtml(s)}</option>`
+      ).join('');
+    }
+
+    function handleBulkRoomChange() {
+      const roomSelect = document.getElementById('bulk-target-room');
+      if (!roomSelect) return;
+      updateBulkShelfOptions(roomSelect.value, '');
+    }
+
+    async function executeBulkLocationUpdate() {
+      if (isBulkUpdating || selectedBookIds.size === 0) return;
+
+      const newRoom = (document.getElementById('bulk-target-room').value || '').trim();
+      const newShelf = (document.getElementById('bulk-target-shelf').value || '').trim();
+
+      if (!newRoom || !newShelf) {
+        showToast('移動先の部屋と本棚を選択してください', 'warning');
+        return;
+      }
+
+      const targetIds = Array.from(selectedBookIds);
+      const btn = document.getElementById('btn-execute-bulk-update');
+      isBulkUpdating = true;
+      btn.disabled = true;
+      btn.textContent = `更新中... (0/${targetIds.length})`;
+
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        for (let i = 0; i < targetIds.length; i++) {
+          const bookId = targetIds[i];
+          const book = allBooks.find(b => b.id === bookId) || sessionScannedBooks.find(b => b.id === bookId);
+          if (!book) continue;
+
+          btn.textContent = `更新中... (${i + 1}/${targetIds.length})`;
+
+          try {
+            if (registerGasUrl && registerGasUrl.startsWith('http')) {
+              const res = await fetch(registerGasUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                  action: 'updateBook',
+                  id: book.id,
+                  title: book.title,
+                  author: book.author || '',
+                  room: newRoom,
+                  shelf: newShelf,
+                  note: book.note || ''
+                })
+              });
+              const data = await res.json();
+              if (data.status !== 'success') throw new Error(data.message || '更新失敗');
+            }
+
+            const inAll = allBooks.find(b => b.id === bookId);
+            if (inAll) {
+              inAll.room = newRoom;
+              inAll.shelf = newShelf;
+            }
+            const inSession = sessionScannedBooks.find(b => b.id === bookId);
+            if (inSession) {
+              inSession.room = newRoom;
+              inSession.shelf = newShelf;
+            }
+            successCount++;
+          } catch (err) {
+            console.error('Bulk update error:', bookId, err);
+            failCount++;
+          }
+        }
+
+        selectedBookIds.clear();
+        updateBulkUpdateBar();
+        renderSessionHistory();
+        renderSearchFilterChips();
+        renderBooksGrid();
+
+        if (failCount === 0) {
+          showToast(`✅ ${successCount}冊を【${newRoom} ＞ ${newShelf}】へ一括更新しました`, 'success');
+        } else {
+          showToast(`${successCount}冊を更新、${failCount}冊がエラーになりました`, 'warning');
+        }
+      } finally {
+        isBulkUpdating = false;
+        btn.disabled = false;
+        btn.textContent = 'チェックした本を一括更新';
       }
     }
 
