@@ -390,6 +390,130 @@
   </div>
 
   <!-- =====================================================================
+       モーダル1：重複スキャン検知＆2冊目確認アラートモーダル
+  ====================================================================== -->
+  <div id="duplicate-alert-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl border-2 border-amber-400 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold text-lg">
+          ⚠️
+        </div>
+        <div class="min-w-0 flex-1">
+          <span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold mb-1">
+            すでに <span id="dup-existing-count">1</span>冊 登録済みです
+          </span>
+          <h3 id="dup-book-title" class="font-bold text-sm text-slate-900 leading-snug">書籍タイトル</h3>
+          <p id="dup-book-isbn" class="text-[11px] font-mono text-slate-500 mt-0.5">ISBN: 978...</p>
+        </div>
+      </div>
+
+      <div class="bg-amber-50/90 border border-amber-200 rounded-2xl p-3 space-y-2">
+        <p class="text-xs font-bold text-amber-900">現在の登録場所：</p>
+        <div id="dup-existing-list" class="space-y-1.5"></div>
+      </div>
+
+      <p class="text-xs text-slate-600 leading-relaxed">
+        同じ本を<strong><span id="dup-next-copy-num">2</span>冊目（複本）</strong>として追加登録するか、既存の1冊目を現在の選択先へ移動するか選んでください。
+      </p>
+
+      <div class="space-y-2 pt-1">
+        <button onclick="confirmRegisterDuplicate()" class="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-slate-950 font-bold text-xs shadow-sm transition">
+          ＋ <span id="dup-btn-copy-label">2冊目（複本）</span>として【<span id="dup-target-loc"></span>】に追加登録
+        </button>
+        <button onclick="moveFirstExistingToCurrentLocation()" class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs transition">
+          📦 既存の1冊目を【<span id="dup-move-target-loc"></span>】へ場所移動する
+        </button>
+        <button onclick="closeDuplicateModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+          キャンセル（登録しない）
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       モーダル2：書籍詳細・編集・場所移動・削除モーダル
+  ====================================================================== -->
+  <div id="book-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex gap-3 min-w-0">
+          <img id="modal-book-cover" src="" alt="表紙" class="w-16 h-24 object-cover rounded-xl bg-slate-100 border border-slate-200 shrink-0">
+          <div class="min-w-0 space-y-1">
+            <div class="flex flex-wrap items-center gap-1">
+              <span id="modal-book-location" class="inline-block px-2 py-0.5 rounded-md bg-brand-100 text-brand-800 text-[11px] font-bold"></span>
+              <span id="modal-book-copy-badge" class="hidden inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold"></span>
+            </div>
+            <h3 id="modal-book-title" class="font-bold text-sm text-slate-900 leading-snug line-clamp-2"></h3>
+            <p id="modal-book-author" class="text-xs text-slate-600 truncate"></p>
+            <p id="modal-book-publisher" class="text-[11px] text-slate-400 truncate"></p>
+          </div>
+        </div>
+        <button onclick="closeBookDetailModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between text-[11px] text-slate-400 bg-slate-50 px-3 py-2 rounded-xl font-mono">
+        <span>ISBN: <span id="modal-book-isbn" class="text-slate-700 font-bold"></span></span>
+        <span id="modal-book-timestamp"></span>
+      </div>
+
+      <div class="space-y-3 border-t border-slate-100 pt-3">
+        <div class="space-y-1">
+          <label class="block text-xs font-bold text-slate-700">タイトル（未登録時の手入力・修正）</label>
+          <input type="text" id="modal-new-title" placeholder="書籍タイトルを入力"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <div class="space-y-1">
+          <label class="block text-xs font-bold text-slate-700">著者名</label>
+          <input type="text" id="modal-new-author" placeholder="著者名を入力"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div class="space-y-1">
+            <label class="block text-xs font-bold text-slate-700">保管先の部屋</label>
+            <select id="modal-new-room" onchange="handleModalRoomChange()"
+              class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+          </div>
+          <div class="space-y-1">
+            <label class="block text-xs font-bold text-slate-700">保管先の本棚</label>
+            <select id="modal-new-shelf"
+              class="w-full text-xs font-bold rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"></select>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="block text-xs font-bold text-slate-700">備考・メモ（貸出状況・教科など）</label>
+          <input type="text" id="modal-new-note" placeholder="メモを入力（任意）"
+            class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2 pt-1">
+        <button onclick="updateBookDetails()" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-xs shadow-sm transition">
+          変更を保存する
+        </button>
+
+        <button id="btn-delete-step1" onclick="showDeleteConfirm()" class="w-full py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition">
+          この蔵書を削除する
+        </button>
+
+        <div id="delete-confirm-box" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-2">
+          <p class="text-xs font-bold text-rose-800 text-center">本当にこの本を蔵書データから削除しますか？</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="hideDeleteConfirm()" class="py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-bold">やめる</button>
+            <button onclick="executeDeleteBook()" class="py-2 rounded-lg bg-rose-600 text-white text-xs font-bold">削除を実行</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
        モーダル3：単独GAS 2本（登録用・検索用）連携設定モーダル
   ====================================================================== -->
   <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -470,6 +594,7 @@
     let selectedBookForModal = null;
     let selectedBookIds = new Set();
     let isBulkUpdating = false;
+    let html5QrCode = null;
     let isScannerRunning = false;
     let scanQueue = [];
     let isQueueWorkerRunning = false;
@@ -863,209 +988,112 @@
       const btnStart = document.getElementById('btn-start-camera');
       const btnStop = document.getElementById('btn-stop-camera');
 
-      const safeQrBox = function(viewfinderWidth, viewfinderHeight) {
-        const maxW = Math.max(50, viewfinderWidth - 16);
-        const maxH = Math.max(50, viewfinderHeight - 16);
-        const targetW = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
-        const targetH = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
-        return {
-          width: Math.min(Math.max(targetW, 200), maxW),
-          height: Math.min(Math.max(targetH, 80), maxH)
+      try {
+        const safeQrBox = function(viewfinderWidth, viewfinderHeight) {
+          const maxW = Math.max(50, viewfinderWidth - 16);
+          const maxH = Math.max(50, viewfinderHeight - 16);
+          const targetW = Math.min(Math.floor(viewfinderWidth * 0.85), 520);
+          const targetH = Math.min(Math.floor(viewfinderHeight * 0.34), 170);
+          return {
+            width: Math.min(Math.max(targetW, 200), maxW),
+            height: Math.min(Math.max(targetH, 80), maxH)
+          };
         };
-      };
 
-      const primaryConfig = {
-        fps: 15,
-        qrbox: safeQrBox,
-        aspectRatio: 1.777778,
-        videoConstraints: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      };
+        const simpleConfig = {
+          fps: 15,
+          qrbox: safeQrBox
+        };
 
-      const simpleConfig = {
-        fps: 15,
-        qrbox: safeQrBox
-      };
+        let lastErr = null;
+        let started = false;
 
-      let lastErr = null;
-      let started = false;
+        // 1. まずデバイス列挙なしで背面カメラ起動を直接試行（最も高速で権限競合が起きにくい）
+        const directTargets = [
+          { facingMode: "environment" },
+          { facingMode: "user" }
+        ];
 
-      // 試行候補リストを順番に試す（失敗時はインスタンスを作り直す）
-      const attempts = [
-        { target: { facingMode: "environment" }, cfg: primaryConfig }
-      ];
-
-      // 利用可能なカメラIDを取得できた場合はフォールバック候補に追加
-      try {
-        const cameras = await Html5Qrcode.getCameras();
-        if (cameras && cameras.length > 0) {
-          const backCam = cameras.find(c => /back|rear|environment|背面/i.test(c.label || ''));
-          if (backCam) {
-            attempts.push({ target: backCam.id, cfg: simpleConfig });
-          }
-          cameras.forEach(c => {
-            if (!backCam || c.id !== backCam.id) {
-              attempts.push({ target: c.id, cfg: simpleConfig });
+        for (const target of directTargets) {
+          try {
+            if (html5QrCode) {
+              try { await html5QrCode.stop(); } catch (e) {}
+              try { html5QrCode.clear(); } catch (e) {}
             }
-          });
-        }
-      } catch (camListErr) {
-        lastErr = camListErr;
-      }
-
-      attempts.push({ target: { facingMode: "user" }, cfg: simpleConfig });
-
-      for (const attempt of attempts) {
-        try {
-          if (html5QrCode) {
-            try { await html5QrCode.stop(); } catch (e) {}
-            try { html5QrCode.clear(); } catch (e) {}
+            const scanner = createScannerInstance();
+            await scanner.start(target, simpleConfig, onScanSuccess, () => {});
+            started = true;
+            break;
+          } catch (err) {
+            lastErr = err;
+            console.warn('Direct camera start failed:', target, err);
           }
-          const scanner = createScannerInstance();
-          await scanner.start(
-            attempt.target,
-            attempt.cfg,
-            onScanSuccess,
-            () => {}
-          );
-          started = true;
-          break;
-        } catch (attemptErr) {
-          lastErr = attemptErr;
-          console.warn('Camera start attempt failed:', attempt.target, attemptErr);
         }
-      }
 
-      if (!started) {
-        console.error('Camera start error:', lastErr);
+        // 2. 直接起動が通らない環境（PC等の複数カメラ選択が必要な環境）のみカメラID一覧から試行
+        if (!started) {
+          try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras && cameras.length > 0) {
+              const sorted = [...cameras].sort((a, b) => {
+                const aBack = /back|rear|environment|背面/i.test(a.label || '') ? 0 : 1;
+                const bBack = /back|rear|environment|背面/i.test(b.label || '') ? 0 : 1;
+                return aBack - bBack;
+              });
+              for (const cam of sorted) {
+                try {
+                  if (html5QrCode) {
+                    try { await html5QrCode.stop(); } catch (e) {}
+                    try { html5QrCode.clear(); } catch (e) {}
+                  }
+                  const scanner = createScannerInstance();
+                  await scanner.start(cam.id, simpleConfig, onScanSuccess, () => {});
+                  started = true;
+                  break;
+                } catch (camErr) {
+                  lastErr = camErr;
+                  console.warn('Camera ID start failed:', cam.id, camErr);
+                }
+              }
+            }
+          } catch (listErr) {
+            lastErr = listErr;
+          }
+        }
+
+        if (!started) {
+          console.error('Camera start error:', lastErr);
+          isScannerRunning = false;
+          const errDetail = lastErr ? (lastErr.name || lastErr.message || String(lastErr)) : '不明なエラー';
+          showToast(`カメラを起動できませんでした（${errDetail}）。カメラ許可や他アプリの使用状況をご確認ください`, 'error');
+          return;
+        }
+
+        isScannerRunning = true;
+        placeholder.classList.add('hidden');
+        btnStart.classList.add('hidden');
+        btnStop.classList.remove('hidden');
+
+        // ズーム対応カメラであればスライダーを表示し初期1.5xに設定
+        try {
+          const capabilities = html5QrCode.getRunningTrackCapabilities();
+          if (capabilities && capabilities.zoom) {
+            const zoomBar = document.getElementById('zoom-control-bar');
+            const slider = document.getElementById('camera-zoom-slider');
+            const minZ = capabilities.zoom.min || 1;
+            const maxZ = Math.min(capabilities.zoom.max || 3, 4);
+            const initZ = Math.min(Math.max(1.5, minZ), maxZ);
+            slider.min = minZ;
+            slider.max = maxZ;
+            slider.value = initZ;
+            zoomBar.classList.remove('hidden');
+            await handleZoomChange(initZ);
+          }
+        } catch (zoomErr) {}
+      } catch (fatalErr) {
+        console.error('Fatal startScanner error:', fatalErr);
         isScannerRunning = false;
-        const errDetail = lastErr ? (lastErr.name || lastErr.message || String(lastErr)) : '不明なエラー';
-        showToast(`カメラを起動できませんでした（${errDetail}）。カメラ許可や他アプリの使用状況をご確認ください`, 'error');
-        return;
-      }
-
-      isScannerRunning = true;
-      placeholder.classList.add('hidden');
-      btnStart.classList.add('hidden');
-      btnStop.classList.remove('hidden');
-
-      // ズーム対応カメラであればスライダーを表示し初期1.5xに設定
-      try {
-        const capabilities = html5QrCode.getRunningTrackCapabilities();
-        if (capabilities && capabilities.zoom) {
-          const zoomBar = document.getElementById('zoom-control-bar');
-          const slider = document.getElementById('camera-zoom-slider');
-          const minZ = capabilities.zoom.min || 1;
-          const maxZ = Math.min(capabilities.zoom.max || 3, 4);
-          const initZ = Math.min(Math.max(1.5, minZ), maxZ);
-          slider.min = minZ;
-          slider.max = maxZ;
-          slider.value = initZ;
-          zoomBar.classList.remove('hidden');
-          await handleZoomChange(initZ);
-        }
-      } catch (zoomErr) {}
-    }
-
-    async function handleZoomChange(val) {
-      document.getElementById('zoom-value-label').textContent = Number(val).toFixed(1);
-      if (!html5QrCode || !isScannerRunning) return;
-      try {
-        await html5QrCode.applyVideoConstraints({
-          advanced: [{ zoom: Number(val) }]
-        });
-      } catch (e) {}
-    }
-
-    async function stopScanner() {
-      if (!html5QrCode || !isScannerRunning) return;
-      try {
-        await html5QrCode.stop();
-      } catch (e) {}
-      isScannerRunning = false;
-      document.getElementById('camera-placeholder').classList.remove('hidden');
-      document.getElementById('btn-start-camera').classList.remove('hidden');
-      document.getElementById('btn-stop-camera').classList.add('hidden');
-      document.getElementById('zoom-control-bar').classList.add('hidden');
-      document.getElementById('scan-live-hint').classList.add('hidden');
-    }
-
-    function onScanSuccess(decodedText) {
-      const cleaned = String(decodedText || '').replace(/[^0-9]/g, '');
-
-      // 下段の日本図書コード(192...)を拾った場合は画面上にリアルタイム誘導を出す
-      if (/^192\d{10}$/.test(cleaned)) {
-        const hint = document.getElementById('scan-live-hint');
-        hint.classList.remove('hidden');
-        clearTimeout(liveHintTimer);
-        liveHintTimer = setTimeout(() => hint.classList.add('hidden'), 1800);
-        return;
-      }
-
-      // 978 または 979 から始まる13桁ISBNのみ受け付け
-      if (!/^(978|979)\d{10}$/.test(cleaned)) {
-        return;
-      }
-
-      const now = Date.now();
-      if (cleaned === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
-        return;
-      }
-
-      // 重複確認モーダルが開いている最中のみ一時停止（通常の通信中は次々キューに入れる）
-      if (pendingDuplicateData !== null) {
-        return;
-      }
-
-      lastScannedIsbn = cleaned;
-      lastScannedTime = now;
-      document.getElementById('scan-live-hint').classList.add('hidden');
-      enqueueBookScan(cleaned, false);
-    }
-
-    /**
-     * iPad標準カメラで撮影した静止画からバーコードを読み取る（ピントが合いにくい本用の保険）
-     */
-    async function handleImageFileScan(event) {
-      const file = event.target.files && event.target.files[0];
-      event.target.value = '';
-      if (!file) return;
-
-      if (isScannerRunning) {
-        await stopScanner();
-      }
-
-      const badge = document.getElementById('scan-processing-badge');
-      const badgeText = document.getElementById('scan-processing-text');
-      badgeText.textContent = '撮影した写真からバーコードを解析中...';
-      badge.classList.remove('hidden');
-
-      try {
-        if (!html5QrCode) {
-          html5QrCode = new Html5Qrcode("reader", {
-            formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
-            verbose: false
-          });
-        }
-        const decodedText = await html5QrCode.scanFile(file, false);
-        const cleaned = decodedText.replace(/[^0-9]/g, '');
-
-        if (/^(978|979)\d{10}$/.test(cleaned)) {
-          badge.classList.add('hidden');
-          enqueueBookScan(cleaned, false);
-        } else if (/^192\d{10}$/.test(cleaned)) {
-          badge.classList.add('hidden');
-          showToast(`下の段の価格コード（${cleaned}）が写りました。上の段（978...）を中心に撮り直してください`, 'warning');
-        } else {
-          badge.classList.add('hidden');
-          showToast(`ISBN以外のコード（${cleaned}）が検出されました`, 'warning');
-        }
-      } catch (err) {
-        badge.classList.add('hidden');
-        showToast('写真からバーコードを読み取れませんでした。明るくピントが合った状態で再撮影してください', 'error');
+        showToast(`カメラ起動処理でエラーが発生しました: ${fatalErr.message || fatalErr}`, 'error');
       }
     }
 
@@ -1158,9 +1186,9 @@
       isQueueWorkerRunning = true;
 
       try {
-        while (scanQueue.length > 0) {
-          if (pendingDuplicateData !== null) {
-            break;
+        const scanner = createScannerInstance();
+        const decodedText = await scanner.scanFile(file, false);
+        const cleaned = decodedText.replace(/[^0-9]/g, '');
           }
 
           const task = scanQueue.shift();
