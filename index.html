@@ -576,9 +576,12 @@
     let isScannerStarting = false;
     let scanQueue = [];
     let isQueueWorkerRunning = false;
+    let activeProcessingIsbn = "";
     let lastScannedIsbn = "";
     let lastScannedTime = 0;
-    const SCAN_COOLDOWN_MS = 2800;
+    let lastAnyScanTime = 0;
+    const SCAN_COOLDOWN_MS = 4000;
+    const GLOBAL_SCAN_INTERVAL_MS = 1100;
     let liveHintTimer = null;
 
     // 重複スキャン確認モーダル用の一時保持データ
@@ -971,7 +974,7 @@
         await html5QrCode.start(
           { facingMode: 'environment' },
           config,
-          onScanSuccess,
+          (decodedText) => onScanSuccess(decodedText, false),
           () => {}
         );
         started = true;
@@ -990,7 +993,7 @@
             await html5QrCode.start(
               backCam.id,
               config,
-              onScanSuccess,
+              (decodedText) => onScanSuccess(decodedText, false),
               () => {}
             );
             started = true;
@@ -1008,7 +1011,7 @@
           await html5QrCode.start(
             { facingMode: 'user' },
             config,
-            onScanSuccess,
+            (decodedText) => onScanSuccess(decodedText, false),
             () => {}
           );
           started = true;
@@ -1152,6 +1155,13 @@
      * =====================================================================
      */
     function onScanSuccess(decodedText, bypassCooldown = false) {
+      const isBypass = bypassCooldown === true;
+
+      // 重複確認モーダル表示中は裏での連続検知を一時停止
+      if (!isBypass && pendingDuplicateData) {
+        return;
+      }
+
       const clean = String(decodedText || '').replace(/[^0-9]/g, '');
       if (clean.length !== 13) return;
 
@@ -1167,11 +1177,25 @@
       }
 
       const now = Date.now();
-      if (!bypassCooldown && clean === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+      if (!isBypass) {
+        // 1冊読み取った直後の全体一呼吸インターバル
+        if ((now - lastAnyScanTime) < GLOBAL_SCAN_INTERVAL_MS) {
+          return;
+        }
+        // 同じ本の連続再読取ブロック
+        if (clean === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+          return;
+        }
+      }
+
+      // 現在登録キュー待機中または送信通信中のISBNは重複スキャンしない
+      if (!isBypass && (activeProcessingIsbn === clean || scanQueue.some(job => job.isbn === clean))) {
         return;
       }
+
       lastScannedIsbn = clean;
       lastScannedTime = now;
+      lastAnyScanTime = now;
 
       hideLiveHint();
 
@@ -1238,6 +1262,7 @@
 
       while (scanQueue.length > 0) {
         const job = scanQueue.shift();
+        activeProcessingIsbn = job.isbn;
         updateProcessingBadge();
 
         try {
@@ -1295,9 +1320,12 @@
         } catch (err) {
           console.error('Register error:', err);
           showToast(`ISBN ${job.isbn} の登録失敗: ${err.message}`, 'error');
+        } finally {
+          activeProcessingIsbn = "";
         }
       }
 
+      activeProcessingIsbn = "";
       isQueueWorkerRunning = false;
       updateProcessingBadge();
     }
@@ -1373,6 +1401,8 @@
 
     function closeDuplicateModal() {
       pendingDuplicateData = null;
+      lastScannedTime = Date.now();
+      lastAnyScanTime = Date.now();
       document.getElementById('duplicate-alert-modal').classList.add('hidden');
     }
 
