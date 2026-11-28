@@ -113,23 +113,23 @@
   ====================================================================== -->
   <main class="max-w-3xl mx-auto px-4 pt-5">
 
-    <!-- 通信失敗時の未送信スキャン再送バナー（失敗データがあるときのみ自動表示） -->
+    <!-- 通信失敗時・未完了WALスキャン再送バナー（未完了データがあるときのみ自動表示） -->
     <div id="failed-queue-banner" class="hidden mb-4 bg-rose-50 border-2 border-rose-300 rounded-2xl p-3.5 shadow-sm space-y-2.5">
       <div class="flex items-start justify-between gap-2">
         <div class="flex items-start gap-2.5">
           <span class="w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">!</span>
           <div>
             <p class="text-xs font-bold text-rose-900">
-              通信エラーにより未送信のスキャンが <span id="failed-queue-count">0</span> 件あります
+              未送信のスキャンデータが <span id="failed-queue-count">0</span> 件端末に保護されています
             </p>
             <p class="text-[11px] text-rose-700 mt-0.5">
-              スキャンデータは安全に一時保存されています。電波状況を確認して再送信してください。
+              電波復帰時に自動再送信されます（リクエストID保護により二重登録は起きません）。
             </p>
           </div>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
           <button onclick="retryAllFailedScans()" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition">
-            まとめて再送信
+            今すぐ再送信
           </button>
           <button onclick="clearFailedScans()" class="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition">
             破棄
@@ -640,9 +640,10 @@
     let sessionScannedBooks = [];
     let operationHistory = [];
 
-    // 通信失敗時の未送信キュー（localStorageにも退避してリロード耐性を確保）
-    const FAILED_QUEUE_STORAGE_KEY = 'hondana_failed_scan_queue_v1';
-    let failedScanQueue = [];
+    // WAL（先行永続化）ストレージ：スキャン瞬間にlocalStorageへ保存しリロード・通信断時の消失と二重登録を防止
+    const WAL_STORAGE_KEY = 'hondana_wal_pending_v1';
+    const LEGACY_FAILED_QUEUE_KEY = 'hondana_failed_scan_queue_v1';
+    let walPendingJobs = [];
 
     // 探索画面のフィルタ・一括選択・モーダル状態
     let activeRoomFilter = 'ALL';
@@ -671,14 +672,26 @@
 
     /**
      * =====================================================================
-     * 初期化処理
+     * 初期化処理（WAL自動復旧＆オンライン復帰リスナー登録）
      * =====================================================================
      */
     window.addEventListener('DOMContentLoaded', () => {
-      restoreFailedScanQueue();
+      restoreWalAndRecover();
       renderRoomAndShelfSelectors();
       renderSearchFilterChips();
       fetchAllBooks(false);
+    });
+
+    window.addEventListener('online', () => {
+      const pendingCount = walPendingJobs.filter(j => j.status === 'failed' || j.status === 'queued').length;
+      if (pendingCount > 0) {
+        showToast(`オンラインに復帰しました。未送信 ${pendingCount} 件を自動再送信します...`, 'info');
+        retryAllFailedScans(true);
+      }
+    });
+
+    window.addEventListener('offline', () => {
+      showToast('オフラインになりました。スキャンデータは端末に安全に一時保存されます', 'warning');
     });
 
     /**
@@ -703,197 +716,109 @@
 
     /**
      * =====================================================================
-     * 画面タブ切り替え（とうろく＝青 / 本をさがす＝赤）
+     * WAL（先行永続化）＆ リクエストID管理（データ消失・二重登録ゼロ化）
      * =====================================================================
      */
-    function switchTab(tab) {
-      const scanView = document.getElementById('view-scan');
-      const searchView = document.getElementById('view-search');
-      const navScan = document.getElementById('nav-scan');
-      const navSearch = document.getElementById('nav-search');
-
-      if (tab === 'scan') {
-        scanView.classList.remove('hidden');
-        searchView.classList.add('hidden');
-        navScan.className = "py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-300 transition whitespace-nowrap";
-        navSearch.className = "py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap";
-      } else {
-        if (isScannerRunning) {
-          stopScanner();
-        }
-        scanView.classList.add('hidden');
-        searchView.classList.remove('hidden');
-        navScan.className = "py-2 px-4 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap";
-        navSearch.className = "py-2 px-4 rounded-lg bg-rose-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-rose-300 transition whitespace-nowrap";
-        renderSearchFilterChips();
-        renderBooksGrid();
+    function generateRequestId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return 'req_' + window.crypto.randomUUID();
       }
-      updateBulkBarUI();
+      return 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
     }
 
-    /**
-     * =====================================================================
-     * GAS 通信ヘルパー（読み込み・登録・更新・一括更新・削除・履歴）
-     * =====================================================================
-     */
-    function normalizeBookRecord(b) {
-      return {
-        id: String(b.id || ''),
-        timestamp: String(b.timestamp || ''),
-        isbn: String(b.isbn || '').replace(/[^0-9]/g, ''),
-        room: String(b.room || (b.location ? b.location.split('＞')[0].trim() : '未分類の部屋')),
-        shelf: String(b.shelf || (b.location && b.location.includes('＞') ? b.location.split('＞')[1].trim() : '未分類の本棚')),
-        copyNumber: Number(b.copyNumber) || 1,
-        title: String(b.title || 'タイトル未登録'),
-        author: String(b.author || ''),
-        publisher: String(b.publisher || ''),
-        coverUrl: String(b.coverUrl || ''),
-        note: String(b.note || ''),
-        source: String(b.source || '')
-      };
-    }
-
-    async function fetchAllBooks(showToastFlag = false) {
-      const targetUrl = searchGasUrl || registerGasUrl;
-      if (!targetUrl) {
-        isLocationsLoading = false;
-        renderRoomAndShelfSelectors();
-        renderBooksGrid();
-        return;
-      }
-
-      const refreshIcon = document.getElementById('refresh-icon');
-      if (refreshIcon) refreshIcon.classList.add('animate-spin');
-
+    function saveWalStorage() {
       try {
-        const sep = targetUrl.includes('?') ? '&' : '?';
-        const res = await fetch(`${targetUrl}${sep}t=${Date.now()}`, {
-          method: 'GET',
-          redirect: 'follow'
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        if (data.status === 'error') {
-          throw new Error(data.message || 'データ取得エラー');
-        }
-
-        const rawBooks = Array.isArray(data.books) ? data.books : [];
-        allBooks = rawBooks.map(normalizeBookRecord);
-
-        if (Array.isArray(data.history)) {
-          operationHistory = data.history;
-        }
-
-        // 部屋・本棚マスタの統合構築（Locationsシート ＋ Booksシートの既存場所）
-        const mergedLocs = [];
-        const locKeySet = new Set();
-        const pushLoc = (room, shelf) => {
-          const r = String(room || '').trim();
-          const s = String(shelf || '').trim();
-          if (!r || !s) return;
-          const key = `${r}|||${s}`;
-          if (!locKeySet.has(key)) {
-            locKeySet.add(key);
-            mergedLocs.push({ room: r, shelf: s });
-          }
-        };
-
-        if (Array.isArray(data.locations)) {
-          data.locations.forEach(loc => pushLoc(loc.room, loc.shelf));
-        }
-        allBooks.forEach(b => pushLoc(b.room, b.shelf));
-
-        locationMaster = mergedLocs;
-        isLocationsLoading = false;
-
-        const rooms = getUniqueRooms();
-        if (rooms.length > 0) {
-          if (!currentRoom || !rooms.includes(currentRoom)) {
-            currentRoom = rooms[0];
-          }
-          const shelves = getShelvesForRoom(currentRoom);
-          if (!currentShelf || !shelves.includes(currentShelf)) {
-            currentShelf = shelves[0] || '';
-          }
-        }
-
-        renderRoomAndShelfSelectors();
-        renderSearchFilterChips();
-        renderBooksGrid();
-        syncSessionHistoryWithAllBooks();
-        refreshBulkLocationSelectors();
-
-        if (showToastFlag) {
-          showToast(`最新データを読み込みました（全 ${allBooks.length} 冊）`, 'success');
-        }
-      } catch (err) {
-        console.error('fetchAllBooks error:', err);
-        isLocationsLoading = false;
-        renderRoomAndShelfSelectors();
-        renderBooksGrid();
-        showToast(`データの読み込みに失敗しました: ${err.message}`, 'error');
-      } finally {
-        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
-      }
-    }
-
-    async function postToRegisterGas(payload) {
-      if (!registerGasUrl) {
-        throw new Error('登録用GAS URLが設定されていません');
-      }
-      const res = await fetch(registerGasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-        redirect: 'follow'
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        throw new Error('サーバー応答の解析に失敗しました');
-      }
-    }
-
-    /**
-     * =====================================================================
-     * 通信失敗時の未送信キュー管理（データ損失防止）
-     * =====================================================================
-     */
-    function restoreFailedScanQueue() {
-      try {
-        const saved = localStorage.getItem(FAILED_QUEUE_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            failedScanQueue = parsed;
-          }
-        }
-      } catch (_) {
-        failedScanQueue = [];
-      }
-      renderFailedQueueBanner();
-    }
-
-    function saveFailedScanQueue() {
-      try {
-        localStorage.setItem(FAILED_QUEUE_STORAGE_KEY, JSON.stringify(failedScanQueue));
+        localStorage.setItem(WAL_STORAGE_KEY, JSON.stringify(walPendingJobs));
       } catch (_) {}
       renderFailedQueueBanner();
     }
 
-    function addFailedScanJob(job, errorMessage) {
-      failedScanQueue.push({
-        isbn: job.isbn,
-        room: job.room,
-        shelf: job.shelf,
-        forceDuplicate: Boolean(job.forceDuplicate),
-        error: String(errorMessage || '通信エラー'),
-        failedAt: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
-      });
-      saveFailedScanQueue();
+    function upsertWalJob(job) {
+      const idx = walPendingJobs.findIndex(j => j.requestId === job.requestId);
+      if (idx === -1) {
+        walPendingJobs.push(job);
+      } else {
+        walPendingJobs[idx] = { ...walPendingJobs[idx], ...job };
+      }
+      saveWalStorage();
+    }
+
+    function removeWalJob(requestId) {
+      if (!requestId) return;
+      walPendingJobs = walPendingJobs.filter(j => j.requestId !== requestId);
+      saveWalStorage();
+    }
+
+    function restoreWalAndRecover() {
+      const recovered = [];
+
+      // 1. WALストレージから復元
+      try {
+        const savedWal = localStorage.getItem(WAL_STORAGE_KEY);
+        if (savedWal) {
+          const parsed = JSON.parse(savedWal);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(item => {
+              if (item && item.isbn) {
+                recovered.push({
+                  requestId: item.requestId || generateRequestId(),
+                  isbn: String(item.isbn),
+                  room: String(item.room || ''),
+                  shelf: String(item.shelf || ''),
+                  forceDuplicate: Boolean(item.forceDuplicate),
+                  status: 'queued',
+                  error: String(item.error || ''),
+                  createdAt: item.createdAt || new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                });
+              }
+            });
+          }
+        }
+      } catch (_) {}
+
+      // 2. 旧バージョンキーに未送信データが残っていれば移行
+      try {
+        const legacy = localStorage.getItem(LEGACY_FAILED_QUEUE_KEY);
+        if (legacy) {
+          const parsedLegacy = JSON.parse(legacy);
+          if (Array.isArray(parsedLegacy)) {
+            parsedLegacy.forEach(item => {
+              if (item && item.isbn) {
+                recovered.push({
+                  requestId: generateRequestId(),
+                  isbn: String(item.isbn),
+                  room: String(item.room || ''),
+                  shelf: String(item.shelf || ''),
+                  forceDuplicate: Boolean(item.forceDuplicate),
+                  status: 'queued',
+                  error: String(item.error || ''),
+                  createdAt: item.failedAt || new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                });
+              }
+            });
+          }
+          localStorage.removeItem(LEGACY_FAILED_QUEUE_KEY);
+        }
+      } catch (_) {}
+
+      walPendingJobs = recovered;
+      saveWalStorage();
+
+      // 未完了ジョブがあれば起動時に自動再送信を開始
+      if (walPendingJobs.length > 0) {
+        showToast(`前回の未完了スキャン ${walPendingJobs.length} 件を自動復旧して送信します...`, 'info');
+        walPendingJobs.forEach(job => {
+          scanQueue.push({
+            requestId: job.requestId,
+            isbn: job.isbn,
+            room: job.room,
+            shelf: job.shelf,
+            forceDuplicate: job.forceDuplicate
+          });
+        });
+        updateProcessingBadge();
+        processScanQueue();
+      }
     }
 
     function renderFailedQueueBanner() {
@@ -902,47 +827,52 @@
       const listEl = document.getElementById('failed-queue-list');
       if (!banner || !countEl || !listEl) return;
 
-      if (failedScanQueue.length === 0) {
+      const failedItems = walPendingJobs.filter(j => j.status === 'failed');
+      if (failedItems.length === 0) {
         banner.classList.add('hidden');
         return;
       }
 
       banner.classList.remove('hidden');
-      countEl.textContent = failedScanQueue.length;
-      listEl.innerHTML = failedScanQueue.map((item, idx) => `
+      countEl.textContent = failedItems.length;
+      listEl.innerHTML = failedItems.map(item => `
         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-mono text-rose-800">
           ${escapeHtml(item.isbn)} (${escapeHtml(item.room)}＞${escapeHtml(item.shelf)})
-          <button onclick="removeFailedScanItem(${idx})" class="text-rose-400 hover:text-rose-700 font-bold ml-1" title="この1件を除外">×</button>
+          <button onclick="removeWalJob('${escapeJs(item.requestId)}')" class="text-rose-400 hover:text-rose-700 font-bold ml-1" title="この1件を除外">×</button>
         </span>
       `).join('');
     }
 
-    function removeFailedScanItem(index) {
-      failedScanQueue.splice(index, 1);
-      saveFailedScanQueue();
-    }
-
     function clearFailedScans() {
-      failedScanQueue = [];
-      saveFailedScanQueue();
+      walPendingJobs = walPendingJobs.filter(j => j.status !== 'failed');
+      saveWalStorage();
       showToast('未送信キューを破棄しました', 'info');
     }
 
-    function retryAllFailedScans() {
-      if (failedScanQueue.length === 0) return;
-      const toRetry = [...failedScanQueue];
-      failedScanQueue = [];
-      saveFailedScanQueue();
+    function retryAllFailedScans(silent = false) {
+      const targets = walPendingJobs.filter(j => j.status === 'failed');
+      if (targets.length === 0) return;
 
-      toRetry.forEach(item => {
-        enqueueScanJob({
-          isbn: item.isbn,
-          room: item.room,
-          shelf: item.shelf,
-          forceDuplicate: item.forceDuplicate
-        });
+      targets.forEach(item => {
+        if (!scanQueue.some(q => q.requestId === item.requestId)) {
+          upsertWalJob({ ...item, status: 'queued', error: '' });
+          scanQueue.push({
+            requestId: item.requestId,
+            isbn: item.isbn,
+            room: item.room,
+            shelf: item.shelf,
+            forceDuplicate: item.forceDuplicate
+          });
+        }
       });
-      showToast(`${toRetry.length}件の再送信を開始しました`, 'info');
+
+      updateProcessingBadge();
+      if (!isQueueWorkerRunning) {
+        processScanQueue();
+      }
+      if (!silent) {
+        showToast(`${targets.length}件の再送信を開始しました（同じリクエストIDで安全に送信します）`, 'info');
+      }
     }
 
     /**
@@ -1401,14 +1331,13 @@
       if (!isBypass) {
         if ((now - lastAnyScanTime) < GLOBAL_SCAN_INTERVAL_MS) {
           return;
-        }
-        if (clean === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
-          return;
-        }
-      }
+      // 現在登録キュー待機中・送信通信中・未送信WAL待機中のISBNは重複スキャンしない
+      const isAlreadyQueuedOrPending =
+        activeProcessingIsbn === clean ||
+        scanQueue.some(job => job.isbn === clean) ||
+        walPendingJobs.some(job => job.isbn === clean && job.status !== 'failed');
 
-      // 現在登録キュー待機中または送信通信中のISBNは重複スキャンしない
-      if (!isBypass && (activeProcessingIsbn === clean || scanQueue.some(job => job.isbn === clean))) {
+      if (!isBypass && isAlreadyQueuedOrPending) {
         return;
       }
 
@@ -1433,6 +1362,7 @@
 
       playSuccessBeep();
       enqueueScanJob({
+        requestId: generateRequestId(),
         isbn: clean,
         room: currentRoom,
         shelf: currentShelf,
@@ -1456,7 +1386,23 @@
     }
 
     function enqueueScanJob(job) {
-      scanQueue.push(job);
+      const enrichedJob = {
+        requestId: job.requestId || generateRequestId(),
+        isbn: job.isbn,
+        room: job.room,
+        shelf: job.shelf,
+        forceDuplicate: Boolean(job.forceDuplicate)
+      };
+
+      // 【WAL先行永続化】通信キューに入れる前に localStorage へ即座に保存
+      upsertWalJob({
+        ...enrichedJob,
+        status: 'queued',
+        error: '',
+        createdAt: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+      });
+
+      scanQueue.push(enrichedJob);
       updateProcessingBadge();
       if (!isQueueWorkerRunning) {
         processScanQueue();
@@ -1483,11 +1429,13 @@
       while (scanQueue.length > 0) {
         const job = scanQueue.shift();
         activeProcessingIsbn = job.isbn;
+        upsertWalJob({ ...job, status: 'sending', error: '' });
         updateProcessingBadge();
 
         try {
           const data = await postToRegisterGas({
             action: 'register',
+            requestId: job.requestId,
             isbn: job.isbn,
             room: job.room,
             shelf: job.shelf,
@@ -1496,6 +1444,8 @@
           });
 
           if (data.status === 'duplicate') {
+            // 未登録の確認待ち状態として確定したためWALから解放
+            removeWalJob(job.requestId);
             playDuplicateBeep();
             const existing = Array.isArray(data.existingBooks) && data.existingBooks.length > 0
               ? data.existingBooks.map(normalizeBookRecord)
@@ -1508,10 +1458,18 @@
             throw new Error(data.message || '登録に失敗しました');
           }
 
+          // サーバー確定後にWALから削除（コミット）
+          removeWalJob(job.requestId);
+
           const registered = normalizeBookRecord(data.book);
 
-          allBooks.unshift(registered);
-          sessionScannedBooks.unshift(registered);
+          // 冪等応答（deduplicated: true）で既にローカル一覧にある場合は重複追加しない
+          if (!allBooks.some(b => b.id === registered.id)) {
+            allBooks.unshift(registered);
+          }
+          if (!sessionScannedBooks.some(b => b.id === registered.id)) {
+            sessionScannedBooks.unshift(registered);
+          }
 
           if (!locationMaster.some(l => l.room === registered.room && l.shelf === registered.shelf)) {
             locationMaster.push({ room: registered.room, shelf: registered.shelf });
@@ -1522,12 +1480,17 @@
 
           renderSessionHistory();
           renderBooksGrid();
-          showToast(`登録完了: 「${registered.title}」→ ${registered.room} ＞ ${registered.shelf}`, 'success');
+          const suffix = data.deduplicated ? '（再送重複防止済み）' : '';
+          showToast(`登録完了${suffix}: 「${registered.title}」→ ${registered.room} ＞ ${registered.shelf}`, 'success');
         } catch (err) {
           console.error('Register error:', err);
-          // 通信失敗時はデータを失わずに未送信キューへ退避
-          addFailedScanJob(job, err.message);
-          showToast(`ISBN ${job.isbn} の送信失敗（画面上部の未送信キューに退避しました）`, 'error');
+          // 通信失敗時は同じ requestId を保持したまま failed 状態へ移行（WALで永続保護）
+          upsertWalJob({
+            ...job,
+            status: 'failed',
+            error: err.message
+          });
+          showToast(`ISBN ${job.isbn} の送信失敗（WALに保護済み・電波復帰で自動再送します）`, 'error');
         } finally {
           activeProcessingIsbn = "";
         }
@@ -1624,6 +1587,7 @@
       closeDuplicateModal();
       playSuccessBeep();
       enqueueScanJob({
+        requestId: generateRequestId(),
         isbn,
         room: targetRoom,
         shelf: targetShelf,
