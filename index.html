@@ -113,6 +113,32 @@
   ====================================================================== -->
   <main class="max-w-3xl mx-auto px-4 pt-5">
 
+    <!-- 通信失敗時の未送信スキャン再送バナー（失敗データがあるときのみ自動表示） -->
+    <div id="failed-queue-banner" class="hidden mb-4 bg-rose-50 border-2 border-rose-300 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-start gap-2.5">
+          <span class="w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">!</span>
+          <div>
+            <p class="text-xs font-bold text-rose-900">
+              通信エラーにより未送信のスキャンが <span id="failed-queue-count">0</span> 件あります
+            </p>
+            <p class="text-[11px] text-rose-700 mt-0.5">
+              スキャンデータは安全に一時保存されています。電波状況を確認して再送信してください。
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="retryAllFailedScans()" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition">
+            まとめて再送信
+          </button>
+          <button onclick="clearFailedScans()" class="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition">
+            破棄
+          </button>
+        </div>
+      </div>
+      <div id="failed-queue-list" class="flex flex-wrap gap-1.5 pt-1 border-t border-rose-200/70"></div>
+    </div>
+
     <!-- ===================================================================
          ビュー1：バーコード連続スキャン＆登録画面
     ==================================================================== -->
@@ -153,7 +179,7 @@
             </div>
             <div class="flex justify-end gap-2">
               <button onclick="toggleNewRoomForm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">閉じる</button>
-              <button onclick="addNewRoomAndShelf()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">部屋と本棚を追加</button>
+              <button id="btn-add-room-shelf" onclick="addNewRoomAndShelf()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">部屋と本棚を追加</button>
             </div>
           </div>
         </div>
@@ -176,7 +202,7 @@
           <div id="new-shelf-form" class="hidden bg-teal-50/70 p-3 rounded-xl border border-teal-200 flex gap-2">
             <input type="text" id="input-new-shelf" placeholder="新しい本棚名（例：窓際スチール棚B）"
               class="flex-1 text-xs rounded-xl border border-teal-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
-            <button onclick="addNewShelfToCurrentRoom()" class="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold whitespace-nowrap">
+            <button id="btn-add-shelf" onclick="addNewShelfToCurrentRoom()" class="px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold whitespace-nowrap">
               追加
             </button>
           </div>
@@ -190,7 +216,7 @@
             <span class="w-5 h-5 rounded-full bg-brand-100 text-brand-700 inline-flex items-center justify-center text-xs">2</span>
             裏表紙のバーコード（978...）を連続スキャン
           </span>
-          <span class="text-[11px] text-slate-400">送信待ちゼロ・重複検知</span>
+          <span class="text-[11px] text-slate-400">送信待ちゼロ・重複＆検算検証</span>
         </div>
 
         <!-- カメラプレビューコンテナ -->
@@ -336,14 +362,17 @@
           <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="filter-shelf-chips"></div>
         </div>
 
-        <!-- 件数表示と並び替え・全チェック -->
+        <!-- 件数表示・全チェック・履歴＆バックアップ・並び替え -->
         <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs flex-wrap gap-2">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <span class="font-semibold text-slate-600">
               該当: <span id="filtered-books-count" class="text-rose-600 font-bold text-sm">0</span> 冊
             </span>
             <button onclick="selectAllFilteredBooks()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-200 transition">
               表示中を全チェック
+            </button>
+            <button onclick="openHistoryBackupModal()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold border border-slate-200 transition flex items-center gap-1">
+              <span>履歴・バックアップ</span>
             </button>
           </div>
           <div class="flex items-center gap-2">
@@ -372,7 +401,7 @@
   </main>
 
   <!-- =====================================================================
-       フローティングバー：チェックした本の一括場所更新（部屋・本棚）
+       フローティングバー：チェックした本の一括場所更新（サーバー一括処理）
   ====================================================================== -->
   <div id="bulk-update-bar" class="hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-brand-600 shadow-2xl px-4 py-3">
     <div class="max-w-3xl mx-auto space-y-2.5">
@@ -518,7 +547,7 @@
           <input type="text" id="modal-new-note" placeholder="例：〇〇先生私物、赤本2026年度版など"
             class="w-full text-xs rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500">
         </div>
-        <button onclick="updateBookDetails()" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">
+        <button id="btn-save-book-details" onclick="updateBookDetails()" class="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition">
           変更を保存する
         </button>
       </div>
@@ -530,7 +559,7 @@
         </button>
         <div id="delete-confirm-box" class="hidden flex items-center gap-2">
           <span class="text-xs text-rose-600 font-bold">本当に削除しますか？</span>
-          <button onclick="executeDeleteBook()" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold">削除実行</button>
+          <button id="btn-execute-delete" onclick="executeDeleteBook()" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-bold">削除実行</button>
           <button onclick="hideDeleteConfirm()" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">取消</button>
         </div>
       </div>
@@ -538,7 +567,55 @@
   </div>
 
   <!-- =====================================================================
-       アプリケーション制御スクリプト（単独GAS 2本連携・完全版）
+       モーダル3：操作履歴 ＆ バックアップ作成・エクスポートモーダル
+  ====================================================================== -->
+  <div id="history-backup-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-base text-slate-900">操作履歴 ＆ バックアップ</h3>
+          <p class="text-[11px] text-slate-500">登録・編集・一括移動・削除の自動記録とデータ保全</p>
+        </div>
+        <button onclick="closeHistoryBackupModal()" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- バックアップ操作カード -->
+      <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200/80 space-y-2.5">
+        <p class="text-xs font-bold text-slate-700">蔵書データのバックアップ保存</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button id="btn-create-sheet-backup" onclick="createSpreadsheetBackup()" class="py-2.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-xs transition">
+            スプレッドシート内バックアップ
+          </button>
+          <button onclick="downloadBooksCsv()" class="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold transition">
+            CSVファイル保存（Excel用）
+          </button>
+          <button onclick="downloadBooksJson()" class="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-bold transition">
+            JSONファイル保存（完全復元用）
+          </button>
+        </div>
+      </div>
+
+      <!-- 操作履歴一覧 -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-bold text-slate-700">最近の操作履歴（最新100件）</p>
+          <button onclick="loadOperationHistory()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700">
+            再読み込み
+          </button>
+        </div>
+        <div id="history-list-container" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <p class="text-xs text-slate-400 text-center py-6">読み込み中...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       アプリケーション制御スクリプト（単独GAS 2本連携・本番運用完全版）
   ====================================================================== -->
   <script>
     /**
@@ -558,9 +635,14 @@
     let currentShelf = "";
     let isLocationsLoading = true;
 
-    // アプリ全体の蔵書データ＆今回セッション履歴
+    // アプリ全体の蔵書データ・今回セッション履歴・操作履歴
     let allBooks = [];
     let sessionScannedBooks = [];
+    let operationHistory = [];
+
+    // 通信失敗時の未送信キュー（localStorageにも退避してリロード耐性を確保）
+    const FAILED_QUEUE_STORAGE_KEY = 'hondana_failed_scan_queue_v1';
+    let failedScanQueue = [];
 
     // 探索画面のフィルタ・一括選択・モーダル状態
     let activeRoomFilter = 'ALL';
@@ -593,10 +675,31 @@
      * =====================================================================
      */
     window.addEventListener('DOMContentLoaded', () => {
+      restoreFailedScanQueue();
       renderRoomAndShelfSelectors();
       renderSearchFilterChips();
       fetchAllBooks(false);
     });
+
+    /**
+     * =====================================================================
+     * ISBN-13 チェックディジット検証（MOD-10 重み 1・3）
+     * =====================================================================
+     */
+    function isValidIsbn13(rawIsbn) {
+      const clean = String(rawIsbn || '').replace(/[^0-9]/g, '');
+      if (clean.length !== 13) return false;
+      if (!clean.startsWith('978') && !clean.startsWith('979')) return false;
+
+      let sum = 0;
+      for (let i = 0; i < 12; i++) {
+        const digit = Number(clean[i]);
+        sum += (i % 2 === 0) ? digit : digit * 3;
+      }
+      const expectedCheckDigit = (10 - (sum % 10)) % 10;
+      const actualCheckDigit = Number(clean[12]);
+      return expectedCheckDigit === actualCheckDigit;
+    }
 
     /**
      * =====================================================================
@@ -615,7 +718,6 @@
         navScan.className = "py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-300 transition whitespace-nowrap";
         navSearch.className = "py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap";
       } else {
-        // 探索画面へ移動するときはカメラを安全に停止
         if (isScannerRunning) {
           stopScanner();
         }
@@ -631,9 +733,26 @@
 
     /**
      * =====================================================================
-     * GAS 通信ヘルパー（読み込み・登録・更新・削除）
+     * GAS 通信ヘルパー（読み込み・登録・更新・一括更新・削除・履歴）
      * =====================================================================
      */
+    function normalizeBookRecord(b) {
+      return {
+        id: String(b.id || ''),
+        timestamp: String(b.timestamp || ''),
+        isbn: String(b.isbn || '').replace(/[^0-9]/g, ''),
+        room: String(b.room || (b.location ? b.location.split('＞')[0].trim() : '未分類の部屋')),
+        shelf: String(b.shelf || (b.location && b.location.includes('＞') ? b.location.split('＞')[1].trim() : '未分類の本棚')),
+        copyNumber: Number(b.copyNumber) || 1,
+        title: String(b.title || 'タイトル未登録'),
+        author: String(b.author || ''),
+        publisher: String(b.publisher || ''),
+        coverUrl: String(b.coverUrl || ''),
+        note: String(b.note || ''),
+        source: String(b.source || '')
+      };
+    }
+
     async function fetchAllBooks(showToastFlag = false) {
       const targetUrl = searchGasUrl || registerGasUrl;
       if (!targetUrl) {
@@ -659,22 +778,12 @@
           throw new Error(data.message || 'データ取得エラー');
         }
 
-        // 書籍データの正規化
         const rawBooks = Array.isArray(data.books) ? data.books : [];
-        allBooks = rawBooks.map(b => ({
-          id: String(b.id || ''),
-          timestamp: String(b.timestamp || ''),
-          isbn: String(b.isbn || '').replace(/[^0-9]/g, ''),
-          room: String(b.room || (b.location ? b.location.split('＞')[0].trim() : '未分類の部屋')),
-          shelf: String(b.shelf || (b.location && b.location.includes('＞') ? b.location.split('＞')[1].trim() : '未分類の本棚')),
-          copyNumber: Number(b.copyNumber) || 1,
-          title: String(b.title || 'タイトル未登録'),
-          author: String(b.author || ''),
-          publisher: String(b.publisher || ''),
-          coverUrl: String(b.coverUrl || ''),
-          note: String(b.note || ''),
-          source: String(b.source || '')
-        }));
+        allBooks = rawBooks.map(normalizeBookRecord);
+
+        if (Array.isArray(data.history)) {
+          operationHistory = data.history;
+        }
 
         // 部屋・本棚マスタの統合構築（Locationsシート ＋ Booksシートの既存場所）
         const mergedLocs = [];
@@ -698,7 +807,6 @@
         locationMaster = mergedLocs;
         isLocationsLoading = false;
 
-        // 選択中の部屋・本棚を整合性チェックして初期化
         const rooms = getUniqueRooms();
         if (rooms.length > 0) {
           if (!currentRoom || !rooms.includes(currentRoom)) {
@@ -751,7 +859,95 @@
 
     /**
      * =====================================================================
-     * 部屋・本棚マスタ操作とUI描画
+     * 通信失敗時の未送信キュー管理（データ損失防止）
+     * =====================================================================
+     */
+    function restoreFailedScanQueue() {
+      try {
+        const saved = localStorage.getItem(FAILED_QUEUE_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            failedScanQueue = parsed;
+          }
+        }
+      } catch (_) {
+        failedScanQueue = [];
+      }
+      renderFailedQueueBanner();
+    }
+
+    function saveFailedScanQueue() {
+      try {
+        localStorage.setItem(FAILED_QUEUE_STORAGE_KEY, JSON.stringify(failedScanQueue));
+      } catch (_) {}
+      renderFailedQueueBanner();
+    }
+
+    function addFailedScanJob(job, errorMessage) {
+      failedScanQueue.push({
+        isbn: job.isbn,
+        room: job.room,
+        shelf: job.shelf,
+        forceDuplicate: Boolean(job.forceDuplicate),
+        error: String(errorMessage || '通信エラー'),
+        failedAt: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+      });
+      saveFailedScanQueue();
+    }
+
+    function renderFailedQueueBanner() {
+      const banner = document.getElementById('failed-queue-banner');
+      const countEl = document.getElementById('failed-queue-count');
+      const listEl = document.getElementById('failed-queue-list');
+      if (!banner || !countEl || !listEl) return;
+
+      if (failedScanQueue.length === 0) {
+        banner.classList.add('hidden');
+        return;
+      }
+
+      banner.classList.remove('hidden');
+      countEl.textContent = failedScanQueue.length;
+      listEl.innerHTML = failedScanQueue.map((item, idx) => `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-[11px] font-mono text-rose-800">
+          ${escapeHtml(item.isbn)} (${escapeHtml(item.room)}＞${escapeHtml(item.shelf)})
+          <button onclick="removeFailedScanItem(${idx})" class="text-rose-400 hover:text-rose-700 font-bold ml-1" title="この1件を除外">×</button>
+        </span>
+      `).join('');
+    }
+
+    function removeFailedScanItem(index) {
+      failedScanQueue.splice(index, 1);
+      saveFailedScanQueue();
+    }
+
+    function clearFailedScans() {
+      failedScanQueue = [];
+      saveFailedScanQueue();
+      showToast('未送信キューを破棄しました', 'info');
+    }
+
+    function retryAllFailedScans() {
+      if (failedScanQueue.length === 0) return;
+      const toRetry = [...failedScanQueue];
+      failedScanQueue = [];
+      saveFailedScanQueue();
+
+      toRetry.forEach(item => {
+        enqueueScanJob({
+          isbn: item.isbn,
+          room: item.room,
+          shelf: item.shelf,
+          forceDuplicate: item.forceDuplicate
+        });
+      });
+      showToast(`${toRetry.length}件の再送信を開始しました`, 'info');
+    }
+
+    /**
+     * =====================================================================
+     * 部屋・本棚マスタ操作とUI描画（サーバー確定後にローカル更新）
      * =====================================================================
      */
     function getUniqueRooms() {
@@ -852,6 +1048,7 @@
     async function addNewRoomAndShelf() {
       const roomInput = document.getElementById('input-new-room');
       const shelfInput = document.getElementById('input-new-room-shelf');
+      const btn = document.getElementById('btn-add-room-shelf');
       const room = roomInput.value.trim();
       const shelf = shelfInput.value.trim();
 
@@ -860,10 +1057,15 @@
         return;
       }
 
-      await registerNewLocation(room, shelf);
-      roomInput.value = '';
-      shelfInput.value = '';
-      document.getElementById('new-room-form').classList.add('hidden');
+      btn.disabled = true;
+      const ok = await registerNewLocation(room, shelf);
+      btn.disabled = false;
+
+      if (ok) {
+        roomInput.value = '';
+        shelfInput.value = '';
+        document.getElementById('new-room-form').classList.add('hidden');
+      }
     }
 
     async function addNewShelfToCurrentRoom() {
@@ -872,35 +1074,46 @@
         return;
       }
       const shelfInput = document.getElementById('input-new-shelf');
+      const btn = document.getElementById('btn-add-shelf');
       const shelf = shelfInput.value.trim();
       if (!shelf) {
         showToast('新しい本棚名を入力してください', 'warning');
         return;
       }
 
-      await registerNewLocation(currentRoom, shelf);
-      shelfInput.value = '';
-      document.getElementById('new-shelf-form').classList.add('hidden');
+      btn.disabled = true;
+      const ok = await registerNewLocation(currentRoom, shelf);
+      btn.disabled = false;
+
+      if (ok) {
+        shelfInput.value = '';
+        document.getElementById('new-shelf-form').classList.add('hidden');
+      }
     }
 
     async function registerNewLocation(room, shelf) {
-      const exists = locationMaster.some(loc => loc.room === room && loc.shelf === shelf);
-      if (!exists) {
-        locationMaster.push({ room, shelf });
-      }
-      currentRoom = room;
-      currentShelf = shelf;
-      isLocationsLoading = false;
-      renderRoomAndShelfSelectors();
-      renderSearchFilterChips();
-      refreshBulkLocationSelectors();
-
       try {
-        await postToRegisterGas({ action: 'addLocation', room, shelf });
+        const res = await postToRegisterGas({ action: 'addLocation', room, shelf });
+        if (res.status !== 'success') {
+          throw new Error(res.message || '場所の追加に失敗しました');
+        }
+
+        const exists = locationMaster.some(loc => loc.room === room && loc.shelf === shelf);
+        if (!exists) {
+          locationMaster.push({ room, shelf });
+        }
+        currentRoom = room;
+        currentShelf = shelf;
+        isLocationsLoading = false;
+        renderRoomAndShelfSelectors();
+        renderSearchFilterChips();
+        refreshBulkLocationSelectors();
         showToast(`「${room} ＞ ${shelf}」を追加しました`, 'success');
+        return true;
       } catch (err) {
         console.error('addLocation error:', err);
-        showToast(`場所の保存通信に失敗しました（ローカルには反映済み）: ${err.message}`, 'warning');
+        showToast(`場所の保存通信に失敗しました: ${err.message}`, 'error');
+        return false;
       }
     }
 
@@ -917,7 +1130,6 @@
       const btnStop = document.getElementById('btn-stop-camera');
       const placeholder = document.getElementById('camera-placeholder');
 
-      // ユーザージェスチャー内で音声再生コンテキストを起動しておく
       try {
         if (window.Tone && Tone.context && Tone.context.state !== 'running') {
           Tone.start().catch(() => {});
@@ -936,7 +1148,6 @@
         return;
       }
 
-      // 既存のインスタンスがあればクリーンに破棄
       await cleanupScannerInstance();
 
       placeholder.classList.add('hidden');
@@ -1151,7 +1362,7 @@
 
     /**
      * =====================================================================
-     * バーコード検知＆連続スキャンキュー処理
+     * バーコード検知＆連続スキャンキュー処理（ISBN-13 チェックディジット検証付き）
      * =====================================================================
      */
     function onScanSuccess(decodedText, bypassCooldown = false) {
@@ -1167,7 +1378,7 @@
 
       // 下段の日本図書コード（192...）を検出した場合はリアルタイムガイドを表示してスキップ
       if (clean.startsWith('192')) {
-        showLiveHint();
+        showLiveHint('下の段（価格コード）を検出中 → 少し上の段（978...）を枠に入れてください');
         return;
       }
 
@@ -1176,13 +1387,21 @@
         return;
       }
 
+      // ISBN-13 チェックディジット検証（反射等による1桁誤読の偽バーコードを遮断）
+      if (!isValidIsbn13(clean)) {
+        if (isBypass) {
+          showToast(`ISBN「${clean}」のチェックディジット（検算値）が一致しません`, 'warning');
+        } else {
+          showLiveHint('バーコード読み取り調整中 → 枠内にまっすぐかざしてください');
+        }
+        return;
+      }
+
       const now = Date.now();
       if (!isBypass) {
-        // 1冊読み取った直後の全体一呼吸インターバル
         if ((now - lastAnyScanTime) < GLOBAL_SCAN_INTERVAL_MS) {
           return;
         }
-        // 同じ本の連続再読取ブロック
         if (clean === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
           return;
         }
@@ -1221,8 +1440,9 @@
       });
     }
 
-    function showLiveHint() {
+    function showLiveHint(text) {
       const hint = document.getElementById('scan-live-hint');
+      hint.textContent = text;
       hint.classList.remove('hidden');
       if (liveHintTimer) clearTimeout(liveHintTimer);
       liveHintTimer = setTimeout(() => {
@@ -1278,7 +1498,7 @@
           if (data.status === 'duplicate') {
             playDuplicateBeep();
             const existing = Array.isArray(data.existingBooks) && data.existingBooks.length > 0
-              ? data.existingBooks
+              ? data.existingBooks.map(normalizeBookRecord)
               : allBooks.filter(b => b.isbn === job.isbn);
             openDuplicateModal(job.isbn, existing, job.room, job.shelf);
             continue;
@@ -1288,25 +1508,11 @@
             throw new Error(data.message || '登録に失敗しました');
           }
 
-          const registered = {
-            id: String(data.book.id || ''),
-            timestamp: String(data.book.timestamp || ''),
-            isbn: String(data.book.isbn || job.isbn),
-            room: String(data.book.room || job.room),
-            shelf: String(data.book.shelf || job.shelf),
-            copyNumber: Number(data.book.copyNumber) || 1,
-            title: String(data.book.title || `タイトル未登録 (ISBN: ${job.isbn})`),
-            author: String(data.book.author || ''),
-            publisher: String(data.book.publisher || ''),
-            coverUrl: String(data.book.coverUrl || ''),
-            note: String(data.book.note || ''),
-            source: String(data.book.source || '')
-          };
+          const registered = normalizeBookRecord(data.book);
 
           allBooks.unshift(registered);
           sessionScannedBooks.unshift(registered);
 
-          // 場所マスタに未登録なら追加
           if (!locationMaster.some(l => l.room === registered.room && l.shelf === registered.shelf)) {
             locationMaster.push({ room: registered.room, shelf: registered.shelf });
             renderRoomAndShelfSelectors();
@@ -1319,7 +1525,9 @@
           showToast(`登録完了: 「${registered.title}」→ ${registered.room} ＞ ${registered.shelf}`, 'success');
         } catch (err) {
           console.error('Register error:', err);
-          showToast(`ISBN ${job.isbn} の登録失敗: ${err.message}`, 'error');
+          // 通信失敗時はデータを失わずに未送信キューへ退避
+          addFailedScanJob(job, err.message);
+          showToast(`ISBN ${job.isbn} の送信失敗（画面上部の未送信キューに退避しました）`, 'error');
         } finally {
           activeProcessingIsbn = "";
         }
@@ -1340,6 +1548,10 @@
       const clean = input.value.replace(/[^0-9]/g, '');
       if (clean.length !== 13 || (!clean.startsWith('978') && !clean.startsWith('979'))) {
         showToast('978または979から始まる13桁のISBNを入力してください', 'warning');
+        return;
+      }
+      if (!isValidIsbn13(clean)) {
+        showToast('ISBNのチェックディジット（末尾の検算数字）が一致しません。打ち間違いをご確認ください', 'warning');
         return;
       }
       input.value = '';
@@ -1442,7 +1654,7 @@
         showToast(`「${targetBook.title}」を「${targetRoom} ＞ ${targetShelf}」へ移動しました`, 'success');
       } catch (err) {
         console.error('Move existing error:', err);
-        showToast(`場所移動に失敗しました: ${err.message}`, 'error');
+        showToast(`場所移動に失敗しました（元の場所は維持されています）: ${err.message}`, 'error');
       }
     }
 
@@ -1623,7 +1835,6 @@
           const coverAttrs = buildCoverImgAttributes(book);
           return `
             <article onclick="openBookDetailModal('${escapeJs(book.id)}')" class="relative rounded-2xl border shadow-xs overflow-hidden flex flex-col cursor-pointer transition ${cardCls}">
-              <!-- 一括選択チェックボックス -->
               <label onclick="event.stopPropagation()" class="absolute top-2 left-2 z-10 bg-white/95 backdrop-blur-xs rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center cursor-pointer">
                 <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleBookSelection('${escapeJs(book.id)}', event)"
                   class="w-4 h-4 rounded accent-brand-600 cursor-pointer">
@@ -1681,7 +1892,7 @@
 
     /**
      * =====================================================================
-     * チェック選択による保管場所の一括更新（本棚の引っ越し機能）
+     * チェック選択による保管場所の一括更新（サーバー一括API ＋ フォールバック）
      * =====================================================================
      */
     function toggleBookSelection(bookId, event) {
@@ -1723,7 +1934,6 @@
       const spacer = document.getElementById('bulk-bar-spacer');
       const countEl = document.getElementById('bulk-selected-count');
 
-      // 削除済みIDがあれば掃除
       const validIds = new Set(allBooks.map(b => b.id));
       for (const id of Array.from(selectedBookIds)) {
         if (!validIds.has(id)) selectedBookIds.delete(id);
@@ -1796,47 +2006,83 @@
       const btn = document.getElementById('btn-execute-bulk-update');
       const originalText = btn.textContent;
       btn.disabled = true;
+      btn.textContent = `${targetIds.length}冊を一括更新中...`;
 
-      let successCount = 0;
-      let failCount = 0;
+      try {
+        // 1回のサーバー通信で一括更新（RegisterApi.gs の bulkUpdateLocation）
+        const res = await postToRegisterGas({
+          action: 'bulkUpdateLocation',
+          ids: targetIds,
+          room: targetRoom,
+          shelf: targetShelf,
+          location: `${targetRoom} ＞ ${targetShelf}`
+        });
 
-      for (let i = 0; i < targetIds.length; i++) {
-        const id = targetIds[i];
-        const book = allBooks.find(b => b.id === id);
-        if (!book) continue;
+        if (res.status === 'success') {
+          const updatedIdSet = new Set(Array.isArray(res.updatedIds) ? res.updatedIds.map(String) : targetIds);
+          let updatedCount = 0;
 
-        btn.textContent = `一括更新中... (${i + 1}/${targetIds.length})`;
-        try {
-          await updateSingleBookOnServer({
-            id: book.id,
-            title: book.title,
-            author: book.author,
-            room: targetRoom,
-            shelf: targetShelf,
-            note: book.note
+          allBooks.forEach(book => {
+            if (updatedIdSet.has(book.id)) {
+              book.room = targetRoom;
+              book.shelf = targetShelf;
+              selectedBookIds.delete(book.id);
+              updatedCount++;
+            }
           });
-          book.room = targetRoom;
-          book.shelf = targetShelf;
-          selectedBookIds.delete(id);
-          successCount++;
-        } catch (err) {
-          console.error(`Bulk update failed for ${id}:`, err);
-          failCount++;
+
+          syncSessionHistoryWithAllBooks();
+          renderBooksGrid();
+          updateBulkBarUI();
+          showToast(`${updatedCount}冊を「${targetRoom} ＞ ${targetShelf}」へ一括更新しました`, 'success');
+          return;
         }
-      }
 
-      isBulkUpdating = false;
-      btn.disabled = false;
-      btn.textContent = originalText;
+        // 旧GASがまだデプロイされている場合の自動フォールバック（1冊ずつ更新）
+        if (res.message && /不明なアクション/.test(res.message)) {
+          let successCount = 0;
+          let failCount = 0;
+          for (let i = 0; i < targetIds.length; i++) {
+            const id = targetIds[i];
+            const book = allBooks.find(b => b.id === id);
+            if (!book) continue;
+            btn.textContent = `一括更新中... (${i + 1}/${targetIds.length})`;
+            try {
+              await updateSingleBookOnServer({
+                id: book.id,
+                title: book.title,
+                author: book.author,
+                room: targetRoom,
+                shelf: targetShelf,
+                note: book.note
+              });
+              book.room = targetRoom;
+              book.shelf = targetShelf;
+              selectedBookIds.delete(id);
+              successCount++;
+            } catch (_) {
+              failCount++;
+            }
+          }
+          syncSessionHistoryWithAllBooks();
+          renderBooksGrid();
+          updateBulkBarUI();
+          if (failCount === 0) {
+            showToast(`${successCount}冊を「${targetRoom} ＞ ${targetShelf}」へ一括更新しました`, 'success');
+          } else {
+            showToast(`${successCount}冊を更新、${failCount}冊で通信エラーが発生しました（未更新分は維持）`, 'warning');
+          }
+          return;
+        }
 
-      syncSessionHistoryWithAllBooks();
-      renderBooksGrid();
-      updateBulkBarUI();
-
-      if (failCount === 0) {
-        showToast(`${successCount}冊を「${targetRoom} ＞ ${targetShelf}」へ一括更新しました`, 'success');
-      } else {
-        showToast(`${successCount}冊を更新、${failCount}冊でエラーが発生しました`, 'warning');
+        throw new Error(res.message || '一括更新に失敗しました');
+      } catch (err) {
+        console.error('executeBulkLocationUpdate error:', err);
+        showToast(`一括更新に失敗しました（元の場所は維持されています）: ${err.message}`, 'error');
+      } finally {
+        isBulkUpdating = false;
+        btn.disabled = false;
+        btn.textContent = originalText;
       }
     }
 
@@ -1877,7 +2123,6 @@
       document.getElementById('modal-new-shelf').value = book.shelf;
       document.getElementById('modal-new-note').value = book.note || '';
 
-      // 部屋・本棚の入力補完リストを更新
       const rooms = getUniqueRooms();
       document.getElementById('modal-room-datalist').innerHTML = rooms.map(r => `<option value="${escapeHtml(r)}">`).join('');
       const allShelves = Array.from(new Set(locationMaster.map(l => l.shelf).filter(Boolean)));
@@ -1906,7 +2151,6 @@
 
       if (data.status === 'success') return data;
 
-      // 旧API仕様（updateLocationのみ対応）へのフォールバック
       if (data.message && /不明なアクション/.test(data.message)) {
         const fb = await postToRegisterGas({
           action: 'updateLocation',
@@ -1935,6 +2179,10 @@
         showToast('部屋名と本棚名は必須です', 'warning');
         return;
       }
+
+      const saveBtn = document.getElementById('btn-save-book-details');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
 
       try {
         await updateSingleBookOnServer({
@@ -1965,7 +2213,10 @@
         showToast('書籍情報を更新しました', 'success');
       } catch (err) {
         console.error('updateBookDetails error:', err);
-        showToast(`更新に失敗しました: ${err.message}`, 'error');
+        showToast(`更新に失敗しました（変更前の内容を維持しています）: ${err.message}`, 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '変更を保存する';
       }
     }
 
@@ -1984,6 +2235,10 @@
       const targetId = selectedBookForModal.id;
       const targetTitle = selectedBookForModal.title;
 
+      const delBtn = document.getElementById('btn-execute-delete');
+      delBtn.disabled = true;
+      delBtn.textContent = '削除中...';
+
       try {
         const data = await postToRegisterGas({ action: 'delete', id: targetId });
         if (data.status !== 'success') {
@@ -1998,11 +2253,153 @@
         renderBooksGrid();
         updateBulkBarUI();
         closeBookDetailModal();
-        showToast(`「${targetTitle}」を削除しました`, 'success');
+        showToast(`「${targetTitle}」を削除しました（操作履歴に退避記録済み）`, 'success');
       } catch (err) {
         console.error('executeDeleteBook error:', err);
-        showToast(`削除に失敗しました: ${err.message}`, 'error');
+        showToast(`削除に失敗しました（リストから消えていません）: ${err.message}`, 'error');
+      } finally {
+        delBtn.disabled = false;
+        delBtn.textContent = '削除実行';
       }
+    }
+
+    /**
+     * =====================================================================
+     * 操作履歴 ＆ バックアップ作成・エクスポート機能
+     * =====================================================================
+     */
+    function openHistoryBackupModal() {
+      document.getElementById('history-backup-modal').classList.remove('hidden');
+      loadOperationHistory();
+    }
+
+    function closeHistoryBackupModal() {
+      document.getElementById('history-backup-modal').classList.add('hidden');
+    }
+
+    async function loadOperationHistory() {
+      const container = document.getElementById('history-list-container');
+      container.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">操作履歴を読み込み中...</p>';
+
+      try {
+        const targetUrl = searchGasUrl || registerGasUrl;
+        const sep = targetUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${targetUrl}${sep}includeHistory=1&t=${Date.now()}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.history)) {
+          operationHistory = data.history;
+        }
+      } catch (err) {
+        console.error('loadOperationHistory error:', err);
+      }
+
+      if (!operationHistory || operationHistory.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">操作履歴はまだありません（登録・編集・一括移動・削除を行うと自動記録されます）</p>';
+        return;
+      }
+
+      const badgeMap = {
+        REGISTER: { label: '登録', cls: 'bg-brand-100 text-brand-800' },
+        UPDATE: { label: '編集', cls: 'bg-teal-100 text-teal-800' },
+        BULK_MOVE: { label: '一括移動', cls: 'bg-indigo-100 text-indigo-800' },
+        DELETE: { label: '削除', cls: 'bg-rose-100 text-rose-800' },
+        BACKUP: { label: 'バックアップ', cls: 'bg-amber-100 text-amber-900' }
+      };
+
+      container.innerHTML = operationHistory.map(h => {
+        const meta = badgeMap[h.actionType] || { label: h.actionType || '操作', cls: 'bg-slate-100 text-slate-700' };
+        return `
+          <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200/80 text-xs space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded font-bold text-[10px] ${meta.cls}">${escapeHtml(meta.label)}</span>
+                <span class="font-bold text-slate-800 truncate">${escapeHtml(h.title || '-')}</span>
+              </div>
+              <span class="text-[10px] text-slate-400 shrink-0">${escapeHtml(h.timestamp || '')}</span>
+            </div>
+            <p class="text-[11px] text-slate-600">${escapeHtml(h.detail || '')}</p>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function createSpreadsheetBackup() {
+      const btn = document.getElementById('btn-create-sheet-backup');
+      btn.disabled = true;
+      btn.textContent = 'バックアップ作成中...';
+
+      try {
+        const res = await postToRegisterGas({ action: 'createBackup' });
+        if (res.status !== 'success') {
+          throw new Error(res.message || 'バックアップ作成に失敗しました');
+        }
+        showToast(`バックアップシート「${res.sheetName || 'Backup'}」を作成しました`, 'success');
+        loadOperationHistory();
+      } catch (err) {
+        console.error('createSpreadsheetBackup error:', err);
+        showToast(`バックアップ作成に失敗しました: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'スプレッドシート内バックアップ';
+      }
+    }
+
+    function downloadBooksCsv() {
+      if (allBooks.length === 0) {
+        showToast('ダウンロードする蔵書データがありません', 'warning');
+        return;
+      }
+      const headers = ['ID', 'タイムスタンプ', 'ISBN', '部屋', '本棚', '冊目', 'タイトル', '著者', '出版社', '表紙画像URL', '備考', '取得ソース'];
+      const escapeCsvCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      const lines = [
+        headers.map(escapeCsvCell).join(','),
+        ...allBooks.map(b => [
+          b.id, b.timestamp, b.isbn, b.room, b.shelf, b.copyNumber,
+          b.title, b.author, b.publisher, b.coverUrl, b.note, b.source
+        ].map(escapeCsvCell).join(','))
+      ];
+
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      triggerFileDownload(blob, `hondana_backup_${formatDateStamp()}.csv`);
+      showToast(`CSVバックアップ（${allBooks.length}冊）をダウンロードしました`, 'success');
+    }
+
+    function downloadBooksJson() {
+      if (allBooks.length === 0) {
+        showToast('ダウンロードする蔵書データがありません', 'warning');
+        return;
+      }
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        totalBooks: allBooks.length,
+        locations: locationMaster,
+        books: allBooks
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+      triggerFileDownload(blob, `hondana_backup_${formatDateStamp()}.json`);
+      showToast(`JSONバックアップ（${allBooks.length}冊）をダウンロードしました`, 'success');
+    }
+
+    function triggerFileDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function formatDateStamp() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
     }
 
     /**
