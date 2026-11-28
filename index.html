@@ -1331,6 +1331,12 @@
       if (!isBypass) {
         if ((now - lastAnyScanTime) < GLOBAL_SCAN_INTERVAL_MS) {
           return;
+        }
+        if (clean === lastScannedIsbn && (now - lastScannedTime) < SCAN_COOLDOWN_MS) {
+          return;
+        }
+      }
+
       // 現在登録キュー待機中・送信通信中・未送信WAL待機中のISBNは重複スキャンしない
       const isAlreadyQueuedOrPending =
         activeProcessingIsbn === clean ||
@@ -2482,6 +2488,147 @@
         .replace(/"/g, '\\"')
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\r');
+    }
+
+    /**
+     * =====================================================================
+     * 画面タブ切替 ＆ GAS API通信・データ正規化ヘルパー
+     * =====================================================================
+     */
+    function switchTab(tab) {
+      const viewScan = document.getElementById('view-scan');
+      const viewSearch = document.getElementById('view-search');
+      const navScan = document.getElementById('nav-scan');
+      const navSearch = document.getElementById('nav-search');
+
+      if (tab === 'search') {
+        if (isScannerRunning) {
+          stopScanner();
+        }
+        viewScan.classList.add('hidden');
+        viewSearch.classList.remove('hidden');
+
+        navScan.className = 'py-2 px-4 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-rose-300 transition whitespace-nowrap';
+        renderBooksGrid();
+      } else {
+        viewSearch.classList.add('hidden');
+        viewScan.classList.remove('hidden');
+
+        navScan.className = 'py-2 px-4 rounded-lg bg-brand-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md ring-2 ring-brand-300 transition whitespace-nowrap';
+        navSearch.className = 'py-2 px-4 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap';
+      }
+    }
+
+    function normalizeBookRecord(raw) {
+      let room = String(raw.room || '').trim();
+      let shelf = String(raw.shelf || '').trim();
+      if ((!room || !shelf) && raw.location && String(raw.location).includes('＞')) {
+        const parts = String(raw.location).split('＞');
+        room = room || parts[0].trim();
+        shelf = shelf || parts[1].trim();
+      }
+      return {
+        id: String(raw.id || ''),
+        timestamp: String(raw.timestamp || ''),
+        isbn: String(raw.isbn || '').replace(/[^0-9]/g, ''),
+        room: room || '未分類の部屋',
+        shelf: shelf || '未分類の本棚',
+        copyNumber: Number(raw.copyNumber) || 1,
+        title: String(raw.title || ''),
+        author: String(raw.author || ''),
+        publisher: String(raw.publisher || ''),
+        coverUrl: String(raw.coverUrl || ''),
+        note: String(raw.note || ''),
+        source: String(raw.source || '')
+      };
+    }
+
+    async function fetchAllBooks(showFeedback = false) {
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+      try {
+        const targetUrl = searchGasUrl || registerGasUrl;
+        const sep = targetUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${targetUrl}${sep}t=${Date.now()}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (data.status !== 'success') {
+          throw new Error(data.message || 'データ取得に失敗しました');
+        }
+
+        allBooks = Array.isArray(data.books) ? data.books.map(normalizeBookRecord) : [];
+
+        const mergedLocations = [];
+        const seenLoc = new Set();
+        const addLoc = (r, s) => {
+          const room = String(r || '').trim();
+          const shelf = String(s || '').trim();
+          if (!room || !shelf) return;
+          const key = `${room}::${shelf}`;
+          if (!seenLoc.has(key)) {
+            seenLoc.add(key);
+            mergedLocations.push({ room, shelf });
+          }
+        };
+
+        if (Array.isArray(data.locations)) {
+          data.locations.forEach(loc => addLoc(loc.room, loc.shelf));
+        }
+        allBooks.forEach(b => addLoc(b.room, b.shelf));
+        locationMaster = mergedLocations;
+
+        if (Array.isArray(data.history)) {
+          operationHistory = data.history;
+        }
+
+        isLocationsLoading = false;
+        renderRoomAndShelfSelectors();
+        renderSearchFilterChips();
+        syncSessionHistoryWithAllBooks();
+        renderBooksGrid();
+        updateBulkBarUI();
+
+        if (showFeedback) {
+          showToast(`最新の蔵書データ（${allBooks.length}冊）を読み込みました`, 'success');
+        }
+      } catch (err) {
+        console.error('fetchAllBooks error:', err);
+        isLocationsLoading = false;
+        renderRoomAndShelfSelectors();
+        renderBooksGrid();
+        showToast(`蔵書データの読み込みに失敗しました: ${err.message}`, 'error');
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    async function postToRegisterGas(payload) {
+      const res = await fetch(registerGasUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      });
+
+      if (!res.ok) {
+        throw new Error(`サーバー応答エラー (HTTP ${res.status})`);
+      }
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        throw new Error('サーバーから不正な応答が返されました');
+      }
     }
   </script>
 </body>
